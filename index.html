@@ -3,30 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#1a1a2e">
+  <meta name="theme-color" content="#8ec9c1">
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="./icon.svg">
   <link rel="stylesheet" href="./styles.css">
-  <title>Minhas Tarefas</title>
+  <title>Fluxo</title>
 </head>
 <body>
   <header class="app-header">
-    <h1>Minhas Tarefas</h1>
+    <div class="brand">
+      <img src="./icon.svg" alt="" class="brand-icon" aria-hidden="true">
+      <h1>Fluxo</h1>
+    </div>
     <button id="install-btn" class="install-btn" hidden>Instalar</button>
   </header>
 
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-view="today" role="tab">Hoje</button>
-    <button class="tab" data-view="upcoming" role="tab">Próximas</button>
-    <button class="tab" data-view="routines" role="tab">Rotinas</button>
-    <button class="tab" data-view="done" role="tab">Concluídas</button>
+    <button class="tab active" data-view="home" role="tab">Início</button>
+    <button class="tab" data-view="pending" role="tab">Pendentes</button>
+    <button class="tab" data-view="calendar" role="tab">Calendário</button>
   </nav>
 
-  <main id="task-list" class="task-list" aria-live="polite"></main>
+  <main id="view" class="view" aria-live="polite"></main>
 
   <button id="add-btn" class="fab" aria-label="Adicionar tarefa">+</button>
 
+  <!-- Modal: Tarefa -->
   <div id="modal" class="modal" hidden>
     <div class="modal-content">
       <header class="modal-header">
@@ -45,7 +48,7 @@
 
         <label class="field">
           <span>Título</span>
-          <input type="text" id="title" required maxlength="200" placeholder="Ex: Tomar água">
+          <input type="text" id="title" required maxlength="200" placeholder="Ex: Regar plantas">
         </label>
 
         <label class="field">
@@ -67,8 +70,8 @@
 
         <div id="oneoff-fields" class="type-fields">
           <label class="field">
-            <span>Data e hora limite</span>
-            <input type="datetime-local" id="deadline">
+            <span>Data limite</span>
+            <input type="date" id="deadline">
           </label>
 
           <fieldset class="field">
@@ -76,59 +79,58 @@
             <ul id="subtasks-list" class="subtasks-list"></ul>
             <div class="row">
               <input type="text" id="new-subtask" placeholder="Nova subtarefa" maxlength="200">
-              <button type="button" id="add-subtask-btn" class="ghost-btn">Adicionar</button>
+              <button type="button" id="add-subtask-btn" class="ghost-btn">+</button>
             </div>
           </fieldset>
         </div>
 
         <div id="routine-fields" class="type-fields" hidden>
           <label class="field">
-            <span>Frequência</span>
-            <select id="recurrence-type">
-              <option value="daily">Todos os dias</option>
-              <option value="weekly">Semanal</option>
-              <option value="monthly">Mensal</option>
-            </select>
+            <span>Próxima ocorrência</span>
+            <input type="date" id="routine-next">
           </label>
-
-          <fieldset id="weekly-fields" class="field" hidden>
-            <legend>Dias da semana</legend>
-            <div class="weekdays">
-              <label class="chip"><input type="checkbox" value="0"><span>Dom</span></label>
-              <label class="chip"><input type="checkbox" value="1"><span>Seg</span></label>
-              <label class="chip"><input type="checkbox" value="2"><span>Ter</span></label>
-              <label class="chip"><input type="checkbox" value="3"><span>Qua</span></label>
-              <label class="chip"><input type="checkbox" value="4"><span>Qui</span></label>
-              <label class="chip"><input type="checkbox" value="5"><span>Sex</span></label>
-              <label class="chip"><input type="checkbox" value="6"><span>Sáb</span></label>
+          <fieldset class="field">
+            <legend>Repetir a cada</legend>
+            <div class="row">
+              <input type="number" id="interval-amount" min="1" max="999" value="1">
+              <select id="interval-unit">
+                <option value="days">dia(s)</option>
+                <option value="weeks" selected>semana(s)</option>
+                <option value="months">mês(es)</option>
+              </select>
             </div>
           </fieldset>
-
-          <label id="monthly-field" class="field" hidden>
-            <span>Dia do mês</span>
-            <input type="number" id="day-of-month" min="1" max="31" value="1">
-          </label>
-
-          <label class="field">
-            <span>Horário</span>
-            <input type="time" id="routine-time" value="09:00">
-          </label>
         </div>
+
+        <fieldset class="field">
+          <legend>Importância</legend>
+          <div class="importance-row">
+            <label class="imp-chip" data-imp="1"><input type="radio" name="importance" value="1"><span>Baixa</span></label>
+            <label class="imp-chip" data-imp="2"><input type="radio" name="importance" value="2" checked><span>Média</span></label>
+            <label class="imp-chip" data-imp="3"><input type="radio" name="importance" value="3"><span>Alta</span></label>
+            <label class="imp-chip" data-imp="4"><input type="radio" name="importance" value="4"><span>Crítica</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend>Tags</legend>
+          <div id="task-tags" class="task-tags"></div>
+          <button type="button" id="manage-tags-btn" class="ghost-btn small">Gerenciar tags</button>
+        </fieldset>
 
         <fieldset class="field">
           <legend>Notificações</legend>
           <ul id="notifications-list" class="notifications-list"></ul>
           <div class="row">
-            <input type="number" id="notif-amount" min="0" max="9999" value="10">
+            <input type="number" id="notif-amount" min="0" max="9999" value="1">
             <select id="notif-unit">
-              <option value="minutes">minutos antes</option>
               <option value="hours">horas antes</option>
-              <option value="days">dias antes</option>
+              <option value="days" selected>dias antes</option>
               <option value="weeks">semanas antes</option>
             </select>
-            <button type="button" id="add-notif-btn" class="ghost-btn">Adicionar</button>
+            <button type="button" id="add-notif-btn" class="ghost-btn">+</button>
           </div>
-          <p class="hint">As notificações funcionam com o app aberto ou em segundo plano. Para uso confiável no celular, instale como app e mantenha permissões ativas.</p>
+          <p class="hint">Receba também resumos diários às 09h (hoje) e 22h (amanhã).</p>
         </fieldset>
 
         <div class="modal-actions">
@@ -136,6 +138,80 @@
           <button type="submit" class="primary-btn">Salvar</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal: Gerenciar Tags -->
+  <div id="tags-modal" class="modal" hidden>
+    <div class="modal-content">
+      <header class="modal-header">
+        <h2>Gerenciar tags</h2>
+        <button id="close-tags-modal" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <ul id="tags-manage-list" class="tags-manage-list"></ul>
+        <div class="row">
+          <input type="text" id="new-tag-name" placeholder="Nova tag" maxlength="40">
+          <button type="button" id="add-tag-btn" class="primary-btn">Criar</button>
+        </div>
+        <p class="hint">Você pode ter até 16 tags. Toque em uma para renomear ou trocar a cor.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit single tag -->
+  <div id="tag-edit-modal" class="modal" hidden>
+    <div class="modal-content">
+      <header class="modal-header">
+        <h2>Editar tag</h2>
+        <button id="close-tag-edit" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" id="tag-edit-name" maxlength="40">
+        </label>
+        <fieldset class="field">
+          <legend>Cor</legend>
+          <div id="tag-color-grid" class="tag-color-grid"></div>
+        </fieldset>
+        <div class="modal-actions">
+          <button type="button" id="tag-delete-btn" class="danger-btn">Excluir</button>
+          <button type="button" id="tag-save-btn" class="primary-btn">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Renovar rotina -->
+  <div id="renew-modal" class="modal" hidden>
+    <div class="modal-content">
+      <header class="modal-header">
+        <h2>Renovar rotina</h2>
+        <button id="close-renew" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <p id="renew-text" class="hint"></p>
+        <label class="field">
+          <span>Próxima ocorrência</span>
+          <input type="date" id="renew-date">
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="renew-skip-btn" class="ghost-btn">Não renovar</button>
+          <button type="button" id="renew-confirm-btn" class="primary-btn">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Day sheet -->
+  <div id="day-sheet" class="modal" hidden>
+    <div class="modal-content">
+      <header class="modal-header">
+        <h2 id="day-sheet-title">Dia</h2>
+        <button id="close-day-sheet" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div id="day-sheet-list" class="task-form"></div>
     </div>
   </div>
 

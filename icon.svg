@@ -1,5 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#1a1a2e"/>
-  <rect x="96" y="96" width="320" height="320" rx="48" fill="#7c5cff"/>
-  <path d="M168 256 l56 56 l120 -136" fill="none" stroke="#fff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7f3ec"/>
+      <stop offset="1" stop-color="#ece4d4"/>
+    </linearGradient>
+    <linearGradient id="riverDeep" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8ec9c1"/>
+      <stop offset="1" stop-color="#6fb3aa"/>
+    </linearGradient>
+    <linearGradient id="riverMid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#b3d9c9"/>
+      <stop offset="1" stop-color="#9ccab8"/>
+    </linearGradient>
+    <linearGradient id="riverShallow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d4e7d8"/>
+      <stop offset="1" stop-color="#bfdcc7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M70 360 C 160 300, 200 420, 290 360 S 420 300, 460 360 L 460 460 L 70 460 Z" fill="url(#riverDeep)" opacity="0.95"/>
+  <path d="M70 280 C 160 220, 220 340, 310 280 S 420 220, 460 280" fill="none" stroke="url(#riverMid)" stroke-width="34" stroke-linecap="round"/>
+  <path d="M70 190 C 170 140, 230 250, 320 190 S 420 140, 460 190" fill="none" stroke="url(#riverShallow)" stroke-width="22" stroke-linecap="round" opacity="0.85"/>
+  <circle cx="180" cy="220" r="6" fill="#ffffff" opacity="0.7"/>
+  <circle cx="320" cy="240" r="4" fill="#ffffff" opacity="0.6"/>
+  <circle cx="380" cy="200" r="5" fill="#ffffff" opacity="0.65"/>
 </svg>

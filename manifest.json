@@ -1,13 +1,13 @@
 {
-  "name": "Minhas Tarefas",
-  "short_name": "Tarefas",
-  "description": "Centralize suas tarefas rotineiras e pontuais com notificações.",
+  "name": "Fluxo",
+  "short_name": "Fluxo",
+  "description": "Bem-estar e fluxo: tarefas, rotinas e calendário em harmonia.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0f1020",
-  "theme_color": "#1a1a2e",
+  "background_color": "#f7f3ec",
+  "theme_color": "#8ec9c1",
   "lang": "pt-BR",
   "icons": [
     {

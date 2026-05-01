@@ -32,16 +32,20 @@ const state = {
   draftTagIds: [],
   recognition: null,
   installPrompt: null,
-  filters: { type: "all", imp: "all", q: "", tagIds: [], showDone: false },
+  filters: { type: "all", imp: "all", tagId: "all", showDone: false },
   calMonth: null,
+  monthPickerYear: null,
   pendingRenew: null,
+  pendingRenewIds: new Set(),
   editingTagId: null,
   editingTagDraft: null,
+  editingDateTaskId: null,
 };
 
 /* ===== persistence ===== */
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 function load() {
   try {
@@ -72,10 +76,7 @@ function saveNotified(s) {
 
 /* ===== dates ===== */
 
-function todayISO() {
-  const d = new Date();
-  return ymd(d);
-}
+function todayISO() { return ymd(new Date()); }
 function ymd(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -92,6 +93,7 @@ function addInterval(dateStr, amount, unit) {
   if (unit === "days") d.setDate(d.getDate() + amount);
   else if (unit === "weeks") d.setDate(d.getDate() + amount * 7);
   else if (unit === "months") d.setMonth(d.getMonth() + amount);
+  else if (unit === "years") d.setFullYear(d.getFullYear() + amount);
   return ymd(d);
 }
 function diffDays(aStr, bStr) {
@@ -102,7 +104,7 @@ function diffDays(aStr, bStr) {
 function fmtDateBR(s) {
   if (!s) return "";
   const d = parseYMD(s);
-  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
 }
 function fmtRelativeDays(s) {
   if (!s) return "";
@@ -110,15 +112,15 @@ function fmtRelativeDays(s) {
   if (d === 0) return "hoje";
   if (d === 1) return "amanhã";
   if (d === -1) return "ontem";
-  if (d > 0) return `em ${d} dia${d > 1 ? "s" : ""}`;
-  return `há ${-d} dias`;
+  if (d > 0 && d < 30) return `em ${d}d`;
+  if (d < 0 && d > -30) return `há ${-d}d`;
+  if (d > 0) return `em ${Math.round(d/30)} mes${d>=60?"es":""}`;
+  return `há ${Math.round(-d/30)} meses`;
 }
 
 /* ===== importance / score ===== */
 
-function scoreFor(task) {
-  return IMP_WEIGHT[task.importance] || IMP_WEIGHT[2];
-}
+function scoreFor(task) { return IMP_WEIGHT[task.importance] || IMP_WEIGHT[2]; }
 
 function scoreDotStyle(score) {
   if (score <= 0) return null;
@@ -131,14 +133,17 @@ function scoreDotStyle(score) {
   return { size, color };
 }
 
-/* ===== tags ===== */
+/* ===== tags / queries ===== */
 
 function tagById(id) { return state.tags.find(t => t.id === id); }
 function tagsOf(task) { return (task.tags || []).map(tagById).filter(Boolean); }
 
-/* ===== task queries ===== */
-
-function activeTasks() { return state.tasks.filter(t => !t.completed); }
+function isRoutineHidden(t) {
+  return t.type === "routine" && (t.active === false || state.pendingRenewIds.has(t.id));
+}
+function isOneoffHidden(t) {
+  return t.type === "oneoff" && t.completed;
+}
 
 function tasksOnDate(dateStr) {
   const items = [];
@@ -146,17 +151,11 @@ function tasksOnDate(dateStr) {
     if (t.type === "oneoff") {
       if (!t.completed && t.deadline === dateStr) items.push(t);
     } else {
-      if (t.active === false) continue;
+      if (isRoutineHidden(t)) continue;
       if (t.nextDue === dateStr) items.push(t);
     }
   }
   return items;
-}
-
-function dayScore(dateStr) {
-  let s = 0;
-  for (const t of tasksOnDate(dateStr)) s += scoreFor(t);
-  return s;
 }
 
 function isOverdue(t) {
@@ -169,21 +168,7 @@ function isDueToday(t) {
   return due === todayISO();
 }
 
-/* ===== views ===== */
-
-function setView(v) {
-  state.view = v;
-  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.view === v));
-  render();
-}
-
-function render() {
-  const view = document.getElementById("view");
-  view.innerHTML = "";
-  if (state.view === "home") renderHome(view);
-  else if (state.view === "pending") renderPending(view);
-  else if (state.view === "calendar") renderCalendar(view);
-}
+/* ===== rendering core ===== */
 
 function el(tag, attrs = {}, ...children) {
   const e = document.createElement(tag);
@@ -202,55 +187,24 @@ function el(tag, attrs = {}, ...children) {
   return e;
 }
 
-function renderHome(root) {
-  const today = todayISO();
-  const oneoffs = state.tasks.filter(t => t.type === "oneoff" && !t.completed);
-  const routines = state.tasks.filter(t => t.type === "routine" && t.active !== false);
+function setView(v) {
+  state.view = v;
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+  render();
+}
 
-  // Important always shown (importance 3 or 4) regardless of date
-  const importantOneoffs = oneoffs.filter(t => t.importance >= 3);
-  const closeOneoffs = oneoffs
-    .filter(t => t.deadline)
-    .sort((a, b) => a.deadline.localeCompare(b.deadline))
-    .slice(0, 8);
-  const homeOneoffs = unique([...importantOneoffs, ...closeOneoffs], t => t.id);
+function render() {
+  const view = document.getElementById("view");
+  view.innerHTML = "";
+  view.classList.remove("view--home", "view--scrollable");
+  // re-trigger animation
+  void view.offsetWidth;
+  view.style.animation = "none";
+  requestAnimationFrame(() => { view.style.animation = ""; });
 
-  const dueRoutines = routines.filter(r => isDueToday(r) || isOverdue(r));
-  const upcomingRoutines = routines
-    .filter(r => !dueRoutines.includes(r))
-    .sort((a, b) => (a.nextDue || "").localeCompare(b.nextDue || ""))
-    .slice(0, 5);
-  const homeRoutines = [...dueRoutines, ...upcomingRoutines];
-
-  // Section: Pontuais
-  const sec1 = el("section", { class: "section" });
-  sec1.appendChild(el("h2", {}, "Pontuais — próximas e importantes"));
-  if (!homeOneoffs.length) {
-    sec1.appendChild(el("div", { class: "empty" }, "Nenhuma tarefa pontual pendente."));
-  } else {
-    const list = el("div", { class: "task-list" });
-    homeOneoffs
-      .sort((a, b) => {
-        const ia = a.importance, ib = b.importance;
-        if (ia !== ib) return ib - ia;
-        return (a.deadline || "9999").localeCompare(b.deadline || "9999");
-      })
-      .forEach(t => list.appendChild(renderTaskCard(t)));
-    sec1.appendChild(list);
-  }
-  root.appendChild(sec1);
-
-  // Section: Rotinas
-  const sec2 = el("section", { class: "section" });
-  sec2.appendChild(el("h2", {}, "Rotinas — hoje e em breve"));
-  if (!homeRoutines.length) {
-    sec2.appendChild(el("div", { class: "empty" }, "Nenhuma rotina ativa."));
-  } else {
-    const list = el("div", { class: "task-list" });
-    homeRoutines.forEach(t => list.appendChild(renderTaskCard(t)));
-    sec2.appendChild(list);
-  }
-  root.appendChild(sec2);
+  if (state.view === "home") { view.classList.add("view--home"); renderHome(view); }
+  else if (state.view === "pending") { view.classList.add("view--scrollable"); renderPending(view); }
+  else if (state.view === "calendar") { view.classList.add("view--scrollable"); renderCalendar(view); }
 }
 
 function unique(arr, keyFn) {
@@ -263,116 +217,167 @@ function unique(arr, keyFn) {
   return out;
 }
 
-function renderTaskCard(t) {
-  const card = el("article", { class: "task" + (t.completed ? " completed" : ""), "data-imp": t.importance });
-  card.appendChild(el("div", { class: "imp-bar" }));
+/* ===== Home ===== */
 
-  const cb = el("input", { type: "checkbox", class: "task-checkbox" });
-  cb.checked = !!t.completed;
-  cb.addEventListener("click", e => { e.stopPropagation(); toggleComplete(t.id); });
-  card.appendChild(cb);
+function renderHome(root) {
+  const today = todayISO();
+  const oneoffs = state.tasks.filter(t => t.type === "oneoff" && !t.completed);
+  const routines = state.tasks.filter(t => t.type === "routine" && !isRoutineHidden(t));
 
-  const body = el("div", { class: "task-body" });
-  body.appendChild(el("div", { class: "task-title" }, t.title));
-
-  const meta = el("div", { class: "task-meta" });
-  if (t.type === "oneoff" && t.deadline) {
-    const overdue = isOverdue(t);
-    const cls = "badge" + (overdue ? " danger" : "");
-    meta.appendChild(el("span", { class: cls }, `${fmtDateBR(t.deadline)} · ${fmtRelativeDays(t.deadline)}`));
-  } else if (t.type === "routine") {
-    const overdue = isOverdue(t);
-    const cls = "badge" + (overdue ? " danger" : "");
-    if (t.nextDue) meta.appendChild(el("span", { class: cls }, `Próx: ${fmtDateBR(t.nextDue)} · ${fmtRelativeDays(t.nextDue)}`));
-    meta.appendChild(el("span", { class: "badge" }, `a cada ${t.intervalAmount} ${unitShort(t.intervalUnit, t.intervalAmount)}`));
-  }
-  if (t.subtasks && t.subtasks.length) {
-    const done = t.subtasks.filter(s => s.completed).length;
-    meta.appendChild(el("span", { class: "badge" }, `${done}/${t.subtasks.length} subtarefas`));
-  }
-  if (t.notifications && t.notifications.length) {
-    meta.appendChild(el("span", { class: "badge" }, `🔔 ${t.notifications.length}`));
-  }
-  meta.appendChild(el("span", { class: "badge" }, IMP_LABEL[t.importance]));
-  body.appendChild(meta);
-
-  if (t.tags && t.tags.length) {
-    const pills = el("div", { class: "task-tag-pills" });
-    tagsOf(t).forEach(tag => {
-      const p = el("span", { class: "tag-pill" }, tag.name);
-      p.style.background = tag.color;
-      pills.appendChild(p);
+  // Lembrete: pontuais (importantes sempre + próximas)
+  const importantOneoffs = oneoffs.filter(t => t.importance >= 3);
+  const closeOneoffs = oneoffs.filter(t => t.deadline)
+    .sort((a, b) => a.deadline.localeCompare(b.deadline));
+  const homeOneoffs = unique([...importantOneoffs, ...closeOneoffs], t => t.id)
+    .sort((a, b) => {
+      if (a.importance !== b.importance) return b.importance - a.importance;
+      return (a.deadline || "9999").localeCompare(b.deadline || "9999");
     });
-    body.appendChild(pills);
-  }
 
-  if (t.subtasks && t.subtasks.length) {
-    const total = t.subtasks.length;
-    const done = t.subtasks.filter(s => s.completed).length;
-    const bar = el("div", { class: "subtasks-progress" });
-    const span = el("span");
-    span.style.width = `${(done / total) * 100}%`;
-    bar.appendChild(span);
-    body.appendChild(bar);
-  }
+  // Pra hoje: rotinas com nextDue <= hoje (atrasadas + hoje)
+  const todayRoutines = routines.filter(r => r.nextDue && r.nextDue <= today)
+    .sort((a, b) => a.nextDue.localeCompare(b.nextDue));
 
-  card.appendChild(body);
-  card.addEventListener("click", () => openTaskModal(t.id));
-  return card;
+  const sec1 = el("section", { class: "section section--home" });
+  sec1.appendChild(el("h2", {}, "Lembrete"));
+  if (!homeOneoffs.length) {
+    sec1.appendChild(el("div", { class: "empty" }, "Nada pra lembrar."));
+  } else {
+    const list = el("div", { class: "task-list" });
+    homeOneoffs.forEach(t => list.appendChild(renderTaskCard(t)));
+    sec1.appendChild(list);
+  }
+  root.appendChild(sec1);
+
+  const sec2 = el("section", { class: "section section--home" });
+  sec2.appendChild(el("h2", {}, "Pra hoje"));
+  if (!todayRoutines.length) {
+    sec2.appendChild(el("div", { class: "empty" }, "Sem rotinas pra hoje."));
+  } else {
+    const list = el("div", { class: "task-list" });
+    todayRoutines.forEach(t => list.appendChild(renderTaskCard(t)));
+    sec2.appendChild(list);
+  }
+  root.appendChild(sec2);
 }
 
+/* ===== Task card ===== */
+
 function unitShort(u, n) {
-  const map = { days: ["dia", "dias"], weeks: ["semana", "semanas"], months: ["mês", "meses"] };
+  const map = {
+    days: ["dia", "dias"],
+    weeks: ["semana", "semanas"],
+    months: ["mês", "meses"],
+    years: ["ano", "anos"]
+  };
   const [s, p] = map[u] || ["", ""];
   return n === 1 ? s : p;
 }
 
-/* ===== Pendentes (filtered) ===== */
+function renderTaskCard(t) {
+  const card = el("article", {
+    class: "task" + (t.completed ? " completed" : ""),
+    "data-imp": t.importance,
+    "data-task-id": t.id
+  });
+
+  const cb = el("input", { type: "checkbox", class: "task-checkbox" });
+  cb.checked = !!t.completed;
+  cb.addEventListener("click", e => { e.stopPropagation(); toggleComplete(t.id); });
+
+  // content (left): title + tags
+  const content = el("div", { class: "task-content" });
+  content.appendChild(el("div", { class: "task-title" }, t.title));
+
+  const tagPills = el("div", { class: "task-tag-pills" });
+  tagsOf(t).forEach(tag => {
+    const p = el("span", { class: "tag-pill" }, tag.name);
+    p.style.background = tag.color;
+    p.addEventListener("click", e => { e.stopPropagation(); openTagEdit(tag.id); });
+    tagPills.appendChild(p);
+  });
+  content.appendChild(tagPills);
+
+  // corner (top-right): crit badge + date stacked
+  const corner = el("div", { class: "task-corner" });
+  corner.appendChild(el("span", { class: "crit-badge", "data-imp": t.importance }, IMP_LABEL[t.importance]));
+
+  const dateStr = t.type === "oneoff" ? t.deadline : t.nextDue;
+  if (dateStr) {
+    const overdue = isOverdue(t);
+    const dateEl = el("div", { class: "task-date" + (overdue ? " overdue" : "") });
+    dateEl.innerHTML = `${fmtDateBR(dateStr)}<br><small>${fmtRelativeDays(dateStr)}</small>`;
+    dateEl.addEventListener("click", e => { e.stopPropagation(); openQuickDate(t.id); });
+    corner.appendChild(dateEl);
+  }
+
+  // footer (bottom-right): freq + counter
+  const footer = el("div", { class: "task-footer" });
+  const freqIcon = el("button", { type: "button", class: "freq-icon", "aria-label": "Frequência" });
+  freqIcon.textContent = t.type === "routine" ? "↻" : "→";
+  freqIcon.addEventListener("click", e => {
+    e.stopPropagation();
+    const msg = t.type === "routine"
+      ? `A cada ${t.intervalAmount} ${unitShort(t.intervalUnit, t.intervalAmount)}`
+      : "Não se repete";
+    showToast(msg);
+  });
+  footer.appendChild(freqIcon);
+
+  let total, done;
+  if (t.type === "oneoff") {
+    if (t.subtasks && t.subtasks.length) {
+      total = t.subtasks.length;
+      done = t.subtasks.filter(s => s.completed).length;
+    } else {
+      total = 1;
+      done = t.completed ? 1 : 0;
+    }
+  } else {
+    total = 1;
+    done = 0;
+  }
+  footer.appendChild(el("span", { class: "sub-counter" + (done >= total ? " complete" : "") }, `${done}/${total}`));
+
+  card.append(cb, content, corner, footer);
+  card.addEventListener("click", () => openTaskModal(t.id));
+  return card;
+}
+
+/* ===== Pendentes ===== */
 
 function renderPending(root) {
   const f = state.filters;
-  const filters = el("section", { class: "filters" });
-  const search = el("input", { type: "text", placeholder: "Buscar título ou descrição...", value: f.q });
-  search.addEventListener("input", () => { f.q = search.value; renderPendingList(listEl); });
-  filters.appendChild(search);
 
-  const row = el("div", { class: "row" });
-  const typeSel = el("select");
-  ["all", "oneoff", "routine"].forEach(v => {
-    const o = el("option", { value: v }, v === "all" ? "Todos os tipos" : v === "oneoff" ? "Pontuais" : "Rotineiras");
+  const filters = el("section", { class: "filters" });
+
+  const typeSel = el("select", { "aria-label": "Tipo" });
+  [["all", "Todos os tipos"], ["oneoff", "Pontuais"], ["routine", "Se repete"]].forEach(([v, lbl]) => {
+    const o = el("option", { value: v }, lbl);
     if (f.type === v) o.selected = true;
     typeSel.appendChild(o);
   });
   typeSel.addEventListener("change", () => { f.type = typeSel.value; renderPendingList(listEl); });
-  row.appendChild(typeSel);
+  filters.appendChild(typeSel);
 
-  const impSel = el("select");
+  const impSel = el("select", { "aria-label": "Importância" });
   [["all", "Toda importância"], ["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
     const o = el("option", { value: v }, lbl);
     if (f.imp === v) o.selected = true;
     impSel.appendChild(o);
   });
   impSel.addEventListener("change", () => { f.imp = impSel.value; renderPendingList(listEl); });
-  row.appendChild(impSel);
-  filters.appendChild(row);
+  filters.appendChild(impSel);
 
-  const tagFilters = el("div", { class: "tag-filters" });
+  const tagSel = el("select", { "aria-label": "Categoria" });
+  tagSel.appendChild(el("option", { value: "all" }, "Toda categoria"));
   state.tags.forEach(tag => {
-    const id = `tf-${tag.id}`;
-    const lbl = el("label", { class: "tag-filter" });
-    const input = el("input", { type: "checkbox", id });
-    input.checked = f.tagIds.includes(tag.id);
-    input.addEventListener("change", () => {
-      if (input.checked) f.tagIds.push(tag.id);
-      else f.tagIds = f.tagIds.filter(x => x !== tag.id);
-      renderPendingList(listEl);
-    });
-    const span = el("span", {}, tag.name);
-    span.style.background = tag.color;
-    lbl.append(input, span);
-    tagFilters.appendChild(lbl);
+    const o = el("option", { value: tag.id }, tag.name);
+    if (f.tagId === tag.id) o.selected = true;
+    tagSel.appendChild(o);
   });
-  filters.appendChild(tagFilters);
+  tagSel.addEventListener("change", () => { f.tagId = tagSel.value; renderPendingList(listEl); });
+  filters.appendChild(tagSel);
 
   const showDoneLbl = el("label", { class: "toggle" });
   const showDone = el("input", { type: "checkbox" });
@@ -384,6 +389,7 @@ function renderPending(root) {
   root.appendChild(filters);
 
   const listEl = el("div", { class: "task-list" });
+  listEl.style.padding = "0";
   root.appendChild(listEl);
   renderPendingList(listEl);
 }
@@ -391,16 +397,11 @@ function renderPending(root) {
 function renderPendingList(container) {
   const f = state.filters;
   let items = state.tasks.slice();
-  if (!f.showDone) items = items.filter(t => !t.completed && (t.type !== "routine" || t.active !== false));
+  if (!f.showDone) items = items.filter(t => !t.completed && !isRoutineHidden(t));
   if (f.type !== "all") items = items.filter(t => t.type === f.type);
   if (f.imp !== "all") items = items.filter(t => String(t.importance) === f.imp);
-  if (f.tagIds.length) items = items.filter(t => f.tagIds.every(id => (t.tags || []).includes(id)));
-  if (f.q.trim()) {
-    const q = f.q.trim().toLowerCase();
-    items = items.filter(t => t.title.toLowerCase().includes(q) || (t.description || "").toLowerCase().includes(q));
-  }
+  if (f.tagId !== "all") items = items.filter(t => (t.tags || []).includes(f.tagId));
 
-  // Group: atrasadas / hoje / 7 dias / depois / sem data
   const groups = { atrasadas: [], hoje: [], proximas: [], depois: [], semData: [], concluidas: [] };
   const today = todayISO();
   for (const t of items) {
@@ -463,7 +464,9 @@ function renderCalendar(root) {
     render();
   });
   const monthName = new Date(y, m, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  header.append(prev, el("h2", {}, monthName.charAt(0).toUpperCase() + monthName.slice(1)), next);
+  const title = el("h2", {}, monthName.charAt(0).toUpperCase() + monthName.slice(1));
+  title.addEventListener("click", openMonthPicker);
+  header.append(prev, title, next);
   root.appendChild(header);
 
   const grid = el("div", { class: "cal-grid" });
@@ -472,9 +475,6 @@ function renderCalendar(root) {
   const first = new Date(y, m, 1);
   const startDow = first.getDay();
   const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const today = todayISO();
-
-  // padding before
   const prevDays = new Date(y, m, 0).getDate();
   for (let i = 0; i < startDow; i++) {
     const day = prevDays - startDow + 1 + i;
@@ -488,7 +488,6 @@ function renderCalendar(root) {
   for (let i = 1; i <= trailing; i++) {
     grid.appendChild(makeCalCell(y, m + 1, i, true));
   }
-
   root.appendChild(grid);
 }
 
@@ -497,8 +496,6 @@ function makeCalCell(y, m, d, outside) {
   const ds = ymd(date);
   const cell = el("div", { class: "cal-day" + (outside ? " outside" : "") + (ds === todayISO() ? " today" : "") });
   cell.appendChild(el("div", { class: "num" }, String(date.getDate())));
-
-  // routines with importance >= 1 all count per spec update
   const items = tasksOnDate(ds);
   const score = items.reduce((s, t) => s + scoreFor(t), 0);
   const dot = scoreDotStyle(score);
@@ -531,24 +528,91 @@ function openDaySheet(dateStr) {
   sheet.hidden = false;
 }
 
-/* ===== task complete & renew ===== */
+/* ===== Month/Year picker ===== */
 
-function toggleComplete(id) {
+function openMonthPicker() {
+  state.monthPickerYear = state.calMonth.y;
+  renderMonthPicker();
+  document.getElementById("month-picker-modal").hidden = false;
+}
+function renderMonthPicker() {
+  document.getElementById("year-display").textContent = state.monthPickerYear;
+  const grid = document.getElementById("month-grid");
+  grid.innerHTML = "";
+  const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  months.forEach((name, i) => {
+    const b = el("button", { type: "button" }, name);
+    if (state.monthPickerYear === state.calMonth.y && i === state.calMonth.m) b.classList.add("active");
+    b.addEventListener("click", () => {
+      state.calMonth = { y: state.monthPickerYear, m: i };
+      document.getElementById("month-picker-modal").hidden = true;
+      render();
+    });
+    grid.appendChild(b);
+  });
+}
+
+/* ===== Animations ===== */
+
+function playBurst(anchor) {
+  const r = anchor.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  const colors = ["#8ec9c1", "#b3d9c9", "#c8d8b0", "#e8c4a0", "#e8a8a0", "#c8b0d8"];
+  const N = 14;
+  for (let i = 0; i < N; i++) {
+    const p = document.createElement("div");
+    p.className = "particle";
+    p.style.left = (cx - 4) + "px";
+    p.style.top = (cy - 4) + "px";
+    p.style.background = colors[i % colors.length];
+    const ang = (i / N) * Math.PI * 2 + (Math.random() - 0.5) * 0.6;
+    const dist = 38 + Math.random() * 38;
+    p.style.setProperty("--dx", Math.cos(ang) * dist + "px");
+    p.style.setProperty("--dy", Math.sin(ang) * dist + "px");
+    p.style.animation = "burst 0.65s forwards ease-out";
+    document.body.appendChild(p);
+    setTimeout(() => p.remove(), 720);
+  }
+}
+
+/* ===== Complete / Renew ===== */
+
+async function toggleComplete(id) {
   const t = state.tasks.find(x => x.id === id);
   if (!t) return;
+
+  // unchecking a completed oneoff: instant
+  if (t.type === "oneoff" && t.completed) {
+    t.completed = false;
+    t.completedAt = null;
+    save();
+    render();
+    return;
+  }
+
+  const card = document.querySelector(`[data-task-id="${id}"]`);
+  if (card) {
+    const cb = card.querySelector(".task-checkbox");
+    if (cb) playBurst(cb);
+    card.classList.add("completing");
+    await sleep(440);
+  }
+
   if (t.type === "oneoff") {
-    t.completed = !t.completed;
-    t.completedAt = t.completed ? new Date().toISOString() : null;
+    t.completed = true;
+    t.completedAt = new Date().toISOString();
     save();
     render();
   } else {
-    // open renew dialog
+    state.pendingRenewIds.add(id);
     state.pendingRenew = { taskId: id };
     const suggested = addInterval(todayISO(), t.intervalAmount, t.intervalUnit);
     document.getElementById("renew-text").textContent =
-      `Marcando "${t.title}" como feita hoje. Sugestão de próxima ocorrência: ${fmtDateBR(suggested)}.`;
+      `"${t.title}" feita hoje. Próxima sugerida: ${fmtDateBR(suggested)}.`;
     document.getElementById("renew-date").value = suggested;
     document.getElementById("renew-modal").hidden = false;
+    render();
   }
 }
 
@@ -562,6 +626,7 @@ function confirmRenew() {
   t.completionCount = (t.completionCount || 0) + 1;
   t.nextDue = newDate;
   t.active = true;
+  state.pendingRenewIds.delete(taskId);
   state.pendingRenew = null;
   document.getElementById("renew-modal").hidden = true;
   save();
@@ -576,11 +641,58 @@ function skipRenew() {
   if (!t) return;
   t.lastCompleted = new Date().toISOString();
   t.active = false;
+  state.pendingRenewIds.delete(taskId);
   state.pendingRenew = null;
   document.getElementById("renew-modal").hidden = true;
   save();
   render();
   showToast("Rotina pausada");
+}
+
+function cancelRenew() {
+  if (state.pendingRenew) state.pendingRenewIds.delete(state.pendingRenew.taskId);
+  state.pendingRenew = null;
+  document.getElementById("renew-modal").hidden = true;
+  render();
+}
+
+/* ===== Quick date editor ===== */
+
+function openQuickDate(taskId) {
+  const t = state.tasks.find(x => x.id === taskId);
+  if (!t) return;
+  state.editingDateTaskId = taskId;
+  const cur = t.type === "oneoff" ? t.deadline : t.nextDue;
+  document.getElementById("quick-date-input").value = cur || "";
+  document.getElementById("quick-date-modal").hidden = false;
+}
+function closeQuickDate() {
+  document.getElementById("quick-date-modal").hidden = true;
+  state.editingDateTaskId = null;
+}
+function quickDateSave() {
+  const t = state.tasks.find(x => x.id === state.editingDateTaskId);
+  if (!t) return;
+  const v = document.getElementById("quick-date-input").value || null;
+  if (t.type === "oneoff") t.deadline = v;
+  else {
+    if (!v) { showToast("Rotina precisa de data"); return; }
+    t.nextDue = v;
+  }
+  save();
+  closeQuickDate();
+  render();
+  showToast("Data atualizada");
+  scheduleNotifications();
+}
+function quickDateClear() {
+  const t = state.tasks.find(x => x.id === state.editingDateTaskId);
+  if (!t) return;
+  if (t.type === "oneoff") t.deadline = null;
+  else { showToast("Rotina não pode ficar sem data"); return; }
+  save();
+  closeQuickDate();
+  render();
 }
 
 /* ===== Task modal ===== */
@@ -616,7 +728,6 @@ function openTaskModal(id = null) {
 
   document.getElementById("mic-status").textContent = "";
   document.getElementById("modal").hidden = false;
-  document.getElementById("title").focus();
 }
 
 function closeTaskModal() {
@@ -659,7 +770,13 @@ function renderNotifications() {
 }
 
 function notificationLabel(n) {
-  const map = { hours: ["hora", "horas"], days: ["dia", "dias"], weeks: ["semana", "semanas"] };
+  const map = {
+    hours: ["hora", "horas"],
+    days: ["dia", "dias"],
+    weeks: ["semana", "semanas"],
+    months: ["mês", "meses"],
+    years: ["ano", "anos"]
+  };
   const [s, p] = map[n.unit] || ["", ""];
   if (n.amount === 0) return "No dia";
   return `${n.amount} ${n.amount === 1 ? s : p} antes`;
@@ -682,7 +799,7 @@ function renderTagSelector() {
     wrap.appendChild(lbl);
   });
   if (!state.tags.length) {
-    wrap.appendChild(el("p", { class: "hint" }, "Nenhuma tag. Crie em \"Gerenciar tags\"."));
+    wrap.appendChild(el("p", { class: "hint" }, 'Nenhuma tag. Crie em "Gerenciar tags".'));
   }
 }
 
@@ -747,9 +864,7 @@ function openTagsModal() {
   renderTagsManageList();
   document.getElementById("tags-modal").hidden = false;
 }
-function closeTagsModal() {
-  document.getElementById("tags-modal").hidden = true;
-}
+function closeTagsModal() { document.getElementById("tags-modal").hidden = true; }
 
 function renderTagsManageList() {
   const ul = document.getElementById("tags-manage-list");
@@ -799,10 +914,7 @@ function renderTagColorGrid() {
     const b = el("button", { type: "button" });
     b.style.background = c;
     if (c === state.editingTagDraft.color) b.classList.add("selected");
-    b.addEventListener("click", () => {
-      state.editingTagDraft.color = c;
-      renderTagColorGrid();
-    });
+    b.addEventListener("click", () => { state.editingTagDraft.color = c; renderTagColorGrid(); });
     grid.appendChild(b);
   });
 }
@@ -838,7 +950,9 @@ function unitMap(s) {
   s = s.toLowerCase();
   if (s.startsWith("dia")) return "days";
   if (s.startsWith("semana")) return "weeks";
-  return "months";
+  if (s.startsWith("mês") || s.startsWith("mes") || s.startsWith("meses")) return "months";
+  if (s.startsWith("ano")) return "years";
+  return "weeks";
 }
 
 const WEEKDAY_MAP = {
@@ -858,18 +972,16 @@ function parseSpeech(text) {
   };
   const consumed = [];
 
-  // importance
   if (/\b(urgent[ie]|cr[ií]tic[oa])\b/.test(lower)) { result.importance = 4; consumed.push(/\b(urgente|cr[ií]tic[oa])\b/gi); }
   else if (/\b(importante|priorit[áa]ri[oa]|alta prioridade)\b/.test(lower)) { result.importance = 3; consumed.push(/\b(importante|priorit[áa]ri[oa]|alta prioridade)\b/gi); }
   else if (/\b(tranquil[oa]|sem pressa|qualquer hora|baixa prioridade)\b/.test(lower)) { result.importance = 1; consumed.push(/\b(tranquil[oa]|sem pressa|qualquer hora|baixa prioridade)\b/gi); }
 
-  // routine: "a cada X unidade"
-  let m = lower.match(/a cada\s+(\d+|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\s+(dias?|semanas?|m[eê]s(?:es)?)/);
+  let m = lower.match(/a cada\s+(\d+|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\s+(dias?|semanas?|m[eê]s(?:es)?|anos?)/);
   if (m) {
     result.type = "routine";
     result.intervalAmount = wordToNum(m[1]);
     result.intervalUnit = unitMap(m[2]);
-    consumed.push(/a cada\s+(\d+|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\s+(dias?|semanas?|m[eê]s(?:es)?)/gi);
+    consumed.push(/a cada\s+(\d+|um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove|dez)\s+(dias?|semanas?|m[eê]s(?:es)?|anos?)/gi);
   } else if (/\b(todo dia|todos os dias|diariamente|diári[oa])\b/.test(lower)) {
     result.type = "routine"; result.intervalAmount = 1; result.intervalUnit = "days";
     consumed.push(/\b(todo dia|todos os dias|diariamente|diári[oa])\b/gi);
@@ -879,9 +991,11 @@ function parseSpeech(text) {
   } else if (/\b(todo m[eê]s|mensalmente|mensal)\b/.test(lower)) {
     result.type = "routine"; result.intervalAmount = 1; result.intervalUnit = "months";
     consumed.push(/\b(todo m[eê]s|mensalmente|mensal)\b/gi);
+  } else if (/\b(todo ano|anualmente|anual)\b/.test(lower)) {
+    result.type = "routine"; result.intervalAmount = 1; result.intervalUnit = "years";
+    consumed.push(/\b(todo ano|anualmente|anual)\b/gi);
   }
 
-  // dates
   const today = new Date();
   let pickedDate = null;
   if (/\bdepois de amanh[ãa]\b/.test(lower)) {
@@ -931,14 +1045,12 @@ function parseSpeech(text) {
     else result.deadline = pickedDate;
   }
 
-  // clean title
   let clean = text;
   consumed.forEach(rx => { clean = clean.replace(rx, " "); });
   clean = clean.replace(/\s+/g, " ").replace(/\s+([,.;!?])/g, "$1").trim();
   clean = clean.replace(/^(de\s+|para\s+|às\s+|as\s+|no\s+|na\s+|em\s+)/i, "").trim();
   if (clean) clean = clean.charAt(0).toUpperCase() + clean.slice(1);
 
-  // subtasks: split if separators
   const subSep = clean.match(/(.+?)(?:\bpassos?:?\s*|\bpreciso:?\s*)(.+)/i);
   let titlePart = clean;
   let subPart = "";
@@ -1030,7 +1142,17 @@ async function ensureNotif() {
   return (await Notification.requestPermission()) === "granted";
 }
 
-function unitToMs(u) { return ({ minutes: 60000, hours: 3600000, days: 86400000, weeks: 604800000 })[u] || 0; }
+function offsetMs(amount, unit) {
+  switch (unit) {
+    case "minutes": return amount * 60000;
+    case "hours": return amount * 3600000;
+    case "days": return amount * 86400000;
+    case "weeks": return amount * 7 * 86400000;
+    case "months": return amount * 30 * 86400000;
+    case "years": return amount * 365 * 86400000;
+    default: return 0;
+  }
+}
 
 function dueMsFor(t) {
   const due = t.type === "oneoff" ? t.deadline : t.nextDue;
@@ -1050,7 +1172,7 @@ function buildScheduledNotifications() {
     const baseMs = dueMsFor(t);
     if (!baseMs) continue;
     for (const n of t.notifications || []) {
-      const trigger = baseMs - n.amount * unitToMs(n.unit);
+      const trigger = baseMs - offsetMs(n.amount, n.unit);
       if (trigger > now && trigger < horizon) {
         items.push({
           id: `t|${t.id}|${baseMs}|${n.amount}|${n.unit}`,
@@ -1061,14 +1183,15 @@ function buildScheduledNotifications() {
       }
     }
   }
-  // Daily digests next 2 occurrences
   for (let i = 0; i < 2; i++) {
     const d9 = nextOccurrenceOfTime(9, 0, i);
     const d22 = nextOccurrenceOfTime(22, 0, i);
-    items.push(buildDigestItem(d9, "morning"));
-    items.push(buildDigestItem(d22, "evening"));
+    const a = buildDigestItem(d9, "morning");
+    const b = buildDigestItem(d22, "evening");
+    if (a) items.push(a);
+    if (b) items.push(b);
   }
-  return items.filter(Boolean);
+  return items;
 }
 
 function nextOccurrenceOfTime(h, m, addDays = 0) {
@@ -1112,7 +1235,6 @@ function checkDueNotifications() {
       notified.add(it.id);
     }
   }
-  // gc old
   for (const id of [...notified]) {
     if (!allIds.has(id)) {
       const parts = id.split("|");
@@ -1155,9 +1277,8 @@ function showToast(msg, ms = 2200) {
 /* ===== wiring ===== */
 
 function setupUI() {
-  document.querySelectorAll(".tab").forEach(b => {
-    b.addEventListener("click", () => setView(b.dataset.view));
-  });
+  document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+
   document.getElementById("add-btn").addEventListener("click", () => openTaskModal());
   document.getElementById("close-modal").addEventListener("click", closeTaskModal);
   document.getElementById("modal").addEventListener("click", e => {
@@ -1168,6 +1289,7 @@ function setupUI() {
   document.querySelectorAll('input[name="type"]').forEach(r => {
     r.addEventListener("change", () => toggleTypeFields(r.value));
   });
+
   document.getElementById("add-subtask-btn").addEventListener("click", () => {
     const input = document.getElementById("new-subtask");
     const v = input.value.trim();
@@ -1179,6 +1301,7 @@ function setupUI() {
   document.getElementById("new-subtask").addEventListener("keydown", e => {
     if (e.key === "Enter") { e.preventDefault(); document.getElementById("add-subtask-btn").click(); }
   });
+
   document.getElementById("add-notif-btn").addEventListener("click", async () => {
     const amount = Number(document.getElementById("notif-amount").value);
     const unit = document.getElementById("notif-unit").value;
@@ -1187,6 +1310,7 @@ function setupUI() {
     renderNotifications();
     await ensureNotif();
   });
+
   document.getElementById("manage-tags-btn").addEventListener("click", openTagsModal);
   document.getElementById("close-tags-modal").addEventListener("click", closeTagsModal);
   document.getElementById("tags-modal").addEventListener("click", e => {
@@ -1196,6 +1320,7 @@ function setupUI() {
   document.getElementById("new-tag-name").addEventListener("keydown", e => {
     if (e.key === "Enter") { e.preventDefault(); addNewTag(); }
   });
+
   document.getElementById("close-tag-edit").addEventListener("click", closeTagEdit);
   document.getElementById("tag-edit-modal").addEventListener("click", e => {
     if (e.target.id === "tag-edit-modal") closeTagEdit();
@@ -1203,9 +1328,9 @@ function setupUI() {
   document.getElementById("tag-save-btn").addEventListener("click", saveTagEdit);
   document.getElementById("tag-delete-btn").addEventListener("click", deleteTagEdit);
 
-  document.getElementById("close-renew").addEventListener("click", () => {
-    document.getElementById("renew-modal").hidden = true;
-    state.pendingRenew = null;
+  document.getElementById("close-renew").addEventListener("click", cancelRenew);
+  document.getElementById("renew-modal").addEventListener("click", e => {
+    if (e.target.id === "renew-modal") cancelRenew();
   });
   document.getElementById("renew-confirm-btn").addEventListener("click", confirmRenew);
   document.getElementById("renew-skip-btn").addEventListener("click", skipRenew);
@@ -1215,6 +1340,28 @@ function setupUI() {
   });
   document.getElementById("day-sheet").addEventListener("click", e => {
     if (e.target.id === "day-sheet") document.getElementById("day-sheet").hidden = true;
+  });
+
+  // Quick date
+  document.getElementById("close-quick-date").addEventListener("click", closeQuickDate);
+  document.getElementById("quick-date-modal").addEventListener("click", e => {
+    if (e.target.id === "quick-date-modal") closeQuickDate();
+  });
+  document.getElementById("quick-date-save").addEventListener("click", quickDateSave);
+  document.getElementById("quick-date-clear").addEventListener("click", quickDateClear);
+
+  // Month picker
+  document.getElementById("close-month-picker").addEventListener("click", () => {
+    document.getElementById("month-picker-modal").hidden = true;
+  });
+  document.getElementById("month-picker-modal").addEventListener("click", e => {
+    if (e.target.id === "month-picker-modal") document.getElementById("month-picker-modal").hidden = true;
+  });
+  document.getElementById("year-prev").addEventListener("click", () => {
+    state.monthPickerYear -= 1; renderMonthPicker();
+  });
+  document.getElementById("year-next").addEventListener("click", () => {
+    state.monthPickerYear += 1; renderMonthPicker();
   });
 }
 

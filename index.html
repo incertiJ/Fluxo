@@ -64,7 +64,7 @@
           </label>
           <label class="radio">
             <input type="radio" name="type" value="routine">
-            <span>Rotineira</span>
+            <span>Se repete</span>
           </label>
         </fieldset>
 
@@ -97,6 +97,7 @@
                 <option value="days">dia(s)</option>
                 <option value="weeks" selected>semana(s)</option>
                 <option value="months">mês(es)</option>
+                <option value="years">ano(s)</option>
               </select>
             </div>
           </fieldset>
@@ -127,6 +128,8 @@
               <option value="hours">horas antes</option>
               <option value="days" selected>dias antes</option>
               <option value="weeks">semanas antes</option>
+              <option value="months">meses antes</option>
+              <option value="years">anos antes</option>
             </select>
             <button type="button" id="add-notif-btn" class="ghost-btn">+</button>
           </div>
@@ -200,6 +203,44 @@
           <button type="button" id="renew-skip-btn" class="ghost-btn">Não renovar</button>
           <button type="button" id="renew-confirm-btn" class="primary-btn">Confirmar</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick date edit -->
+  <div id="quick-date-modal" class="modal popover-modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2>Editar data</h2>
+        <button id="close-quick-date" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <label class="field">
+          <span>Data</span>
+          <input type="date" id="quick-date-input">
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="quick-date-clear" class="ghost-btn">Remover</button>
+          <button type="button" id="quick-date-save" class="primary-btn">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Month/Year picker for calendar -->
+  <div id="month-picker-modal" class="modal popover-modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2>Escolher mês</h2>
+        <button id="close-month-picker" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <div class="year-row">
+          <button type="button" id="year-prev" class="cal-nav-btn">‹</button>
+          <span id="year-display" class="year-display">2026</span>
+          <button type="button" id="year-next" class="cal-nav-btn">›</button>
+        </div>
+        <div id="month-grid" class="month-grid"></div>
       </div>
     </div>
   </div>

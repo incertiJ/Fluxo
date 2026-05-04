@@ -113,12 +113,10 @@ Combina dois papéis:
 
 ## Dúvidas em Aberto
 
-1. **Click em tag dentro do card**: hoje abre tag-edit (edita/apaga sistema-wide). Usuário disse "mudar ela ou apagar" — ambíguo se queria editar a tag global ou só remover da tarefa. Confirmar.
-2. **Click em data de rotina**: hoje força ter data (mostra toast "Rotina não pode ficar sem data"). Está OK?
-3. **Rotinas pausadas (`active: false`)**: como o usuário reativa? Hoje só editando manualmente. Faltou UX clara.
-4. **Visualização de concluídas**: hoje só via toggle em Pendentes. Sumir do calendário e da home — confirmado. Sumir totalmente sem toggle?
-5. **Comportamento "tarefas alta/crítica sempre na home"**: implementado para pontuais. Para rotinas, usuário disse "apenas as repetidas que devem ser feitas hoje". Significa que rotinas crítica NÃO aparecem na home se nextDue for distante? Atual implementação: sim, não aparecem. Confirmar.
-6. **Notificações com unidades grandes (meses/anos)**: usamos aproximação de 30/365 dias. Para precisão real, precisaria calcular relativo ao deadline (pega nextDue, subtrai N meses no calendário). Importa?
+Todas as 6 dúvidas anteriores foram respondidas. Ver Decisions Log § 2026-05 (continuação).
+
+Espaço para novas dúvidas:
+<!-- Adicionar aqui durante implementações -->
 
 ---
 
@@ -175,6 +173,13 @@ Registre decisões técnicas e escolhas de produto que NÃO devem ser revisitada
 - Renovação de rotina: cancelar (X) restaura a tarefa; "não renovar" pausa (active:false)
 - Estrutura `.claude-ops/04_skills/` adicionada para skills carregadas sob demanda (token saver)
 - `CLAUDE_STATE.md` agora combina snapshot + decisions log (memória externa unificada)
+
+### 2026-05 (continuação)
+- Click em tag pill no card abre **seletor leve** de categorias (toggle on/off + criar nova tag inline com cor automática). NÃO abre tag-edit global. Decisão: separar "associar tags a tarefa" de "editar definição da tag" — fluxos distintos.
+- "Não renovar" rotina = **exclusão definitiva** (com confirm). Conceito de rotina pausada (`active:false`) descartado: complexidade não justifica. Migração: load() filtra rotinas com `active:false` e remove campo dos demais.
+- Botão `Não renovar` renomeado para `Excluir rotina` com estilo danger.
+- Estrutura `.claude-ops/04_skills/` (refactor, pwa_audit, feature_add) para carregamento sob demanda.
+- Decision Log e Erros Conhecidos movidos pra `CLAUDE_STATE.md` (single source of truth).
 
 ### Reservado pra próximas decisões
 <!-- Adicionar entradas datadas aqui ao tomar decisões -->

@@ -40,6 +40,7 @@ const state = {
   editingTagId: null,
   editingTagDraft: null,
   editingDateTaskId: null,
+  editingTagsTaskId: null,
 };
 
 /* ===== persistence ===== */
@@ -60,6 +61,11 @@ function load() {
     state.tags = DEFAULT_TAGS.map(t => ({ id: uid(), name: t.name, color: t.color }));
     save();
   }
+  // migration: rotinas pausadas (active:false) foram removidas como conceito
+  const before = state.tasks.length;
+  state.tasks = state.tasks.filter(t => !(t.type === "routine" && t.active === false));
+  state.tasks.forEach(t => { delete t.active; });
+  if (state.tasks.length !== before) save();
 }
 
 function save() {
@@ -139,7 +145,7 @@ function tagById(id) { return state.tags.find(t => t.id === id); }
 function tagsOf(task) { return (task.tags || []).map(tagById).filter(Boolean); }
 
 function isRoutineHidden(t) {
-  return t.type === "routine" && (t.active === false || state.pendingRenewIds.has(t.id));
+  return t.type === "routine" && state.pendingRenewIds.has(t.id);
 }
 function isOneoffHidden(t) {
   return t.type === "oneoff" && t.completed;
@@ -293,7 +299,7 @@ function renderTaskCard(t) {
   tagsOf(t).forEach(tag => {
     const p = el("span", { class: "tag-pill" }, tag.name);
     p.style.background = tag.color;
-    p.addEventListener("click", e => { e.stopPropagation(); openTagEdit(tag.id); });
+    p.addEventListener("click", e => { e.stopPropagation(); openTaskTagsSelector(t.id); });
     tagPills.appendChild(p);
   });
   content.appendChild(tagPills);
@@ -625,7 +631,6 @@ function confirmRenew() {
   t.lastCompleted = new Date().toISOString();
   t.completionCount = (t.completionCount || 0) + 1;
   t.nextDue = newDate;
-  t.active = true;
   state.pendingRenewIds.delete(taskId);
   state.pendingRenew = null;
   document.getElementById("renew-modal").hidden = true;
@@ -637,16 +642,16 @@ function confirmRenew() {
 
 function skipRenew() {
   const { taskId } = state.pendingRenew || {};
-  const t = state.tasks.find(x => x.id === taskId);
-  if (!t) return;
-  t.lastCompleted = new Date().toISOString();
-  t.active = false;
+  if (!taskId) return;
+  if (!confirm("Excluir esta rotina? Para tê-la de volta, será preciso recriar.")) return;
+  state.tasks = state.tasks.filter(x => x.id !== taskId);
   state.pendingRenewIds.delete(taskId);
   state.pendingRenew = null;
   document.getElementById("renew-modal").hidden = true;
   save();
   render();
-  showToast("Rotina pausada");
+  showToast("Rotina excluída");
+  scheduleNotifications();
 }
 
 function cancelRenew() {
@@ -829,7 +834,6 @@ function readForm() {
     base.intervalUnit = document.getElementById("interval-unit").value;
     base.lastCompleted = existing?.lastCompleted || null;
     base.completionCount = existing?.completionCount || 0;
-    base.active = existing?.active !== false;
   }
   return base;
 }
@@ -939,6 +943,73 @@ function deleteTagEdit() {
   closeTagEdit();
   renderTagsManageList();
   if (!document.getElementById("modal").hidden) renderTagSelector();
+  render();
+}
+
+/* ===== Per-task tag selector (acessado via click em pill no card) ===== */
+
+function openTaskTagsSelector(taskId) {
+  state.editingTagsTaskId = taskId;
+  document.getElementById("new-task-tag").value = "";
+  renderTaskTagsSelectorList();
+  document.getElementById("tag-select-modal").hidden = false;
+}
+
+function closeTaskTagsSelector() {
+  document.getElementById("tag-select-modal").hidden = true;
+  state.editingTagsTaskId = null;
+}
+
+function renderTaskTagsSelectorList() {
+  const t = state.tasks.find(x => x.id === state.editingTagsTaskId);
+  const wrap = document.getElementById("tag-select-list");
+  wrap.innerHTML = "";
+  if (!t) return;
+  const taskTags = new Set(t.tags || []);
+  state.tags.forEach(tag => {
+    const lbl = el("label");
+    const input = el("input", { type: "checkbox", value: tag.id });
+    input.checked = taskTags.has(tag.id);
+    input.addEventListener("change", () => {
+      const cur = state.tasks.find(x => x.id === state.editingTagsTaskId);
+      if (!cur) return;
+      cur.tags = cur.tags || [];
+      if (input.checked) {
+        if (!cur.tags.includes(tag.id)) cur.tags.push(tag.id);
+      } else {
+        cur.tags = cur.tags.filter(id => id !== tag.id);
+      }
+      save();
+      render();
+    });
+    const span = el("span", {}, tag.name);
+    span.style.background = tag.color;
+    lbl.append(input, span);
+    wrap.appendChild(lbl);
+  });
+  if (!state.tags.length) {
+    wrap.appendChild(el("p", { class: "hint" }, "Nenhuma tag. Crie uma abaixo."));
+  }
+}
+
+function createTaskTag() {
+  if (state.tags.length >= 16) { showToast("Limite de 16 tags"); return; }
+  const input = document.getElementById("new-task-tag");
+  const name = input.value.trim();
+  if (!name) return;
+  const used = new Set(state.tags.map(t => t.color));
+  const color = TAG_COLORS.find(c => !used.has(c)) || TAG_COLORS[state.tags.length % 16];
+  const newTag = { id: uid(), name, color };
+  state.tags.push(newTag);
+  // attach to current task
+  const t = state.tasks.find(x => x.id === state.editingTagsTaskId);
+  if (t) {
+    t.tags = t.tags || [];
+    t.tags.push(newTag.id);
+  }
+  input.value = "";
+  save();
+  renderTaskTagsSelectorList();
   render();
 }
 
@@ -1168,7 +1239,6 @@ function buildScheduledNotifications() {
   const items = [];
   for (const t of state.tasks) {
     if (t.completed) continue;
-    if (t.type === "routine" && t.active === false) continue;
     const baseMs = dueMsFor(t);
     if (!baseMs) continue;
     for (const n of t.notifications || []) {
@@ -1362,6 +1432,16 @@ function setupUI() {
   });
   document.getElementById("year-next").addEventListener("click", () => {
     state.monthPickerYear += 1; renderMonthPicker();
+  });
+
+  // Per-task tag selector
+  document.getElementById("close-tag-select").addEventListener("click", closeTaskTagsSelector);
+  document.getElementById("tag-select-modal").addEventListener("click", e => {
+    if (e.target.id === "tag-select-modal") closeTaskTagsSelector();
+  });
+  document.getElementById("create-task-tag-btn").addEventListener("click", createTaskTag);
+  document.getElementById("new-task-tag").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); createTaskTag(); }
   });
 }
 

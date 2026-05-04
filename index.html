@@ -200,8 +200,25 @@
           <input type="date" id="renew-date">
         </label>
         <div class="modal-actions">
-          <button type="button" id="renew-skip-btn" class="ghost-btn">Não renovar</button>
+          <button type="button" id="renew-skip-btn" class="danger-btn">Excluir rotina</button>
           <button type="button" id="renew-confirm-btn" class="primary-btn">Confirmar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tag selector for a task -->
+  <div id="tag-select-modal" class="modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2>Categorias</h2>
+        <button id="close-tag-select" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <div id="tag-select-list" class="task-tags"></div>
+        <div class="row">
+          <input type="text" id="new-task-tag" placeholder="Criar nova tag" maxlength="40">
+          <button type="button" id="create-task-tag-btn" class="ghost-btn">Criar</button>
         </div>
       </div>
     </div>

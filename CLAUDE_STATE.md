@@ -2,6 +2,10 @@
 
 Memória de sessão. Atualize ao final de cada sessão antes de resetar o chat.
 
+Combina dois papéis:
+- **Snapshot vivo**: status atual, arquivos, pendências, dúvidas
+- **Decisions Log** (append-only): histórico de decisões pra evitar revisitar
+
 ---
 
 ## Projeto
@@ -137,5 +141,50 @@ Memória de sessão. Atualize ao final de cada sessão antes de resetar o chat.
 
 1. Leia `CLAUDE_INSTRUCTIONS.md` (manual de conduta).
 2. Leia esta seção e abra os arquivos listados em "Pendências Próximas" para contexto.
-3. Antes de codar, valide com o usuário pendências e dúvidas em aberto.
-4. Se a sessão produzir mudanças, atualize este arquivo antes de resetar.
+3. Carregue skill relevante de `.claude-ops/04_skills/` ANTES de codar (refactor / pwa_audit / feature_add).
+4. Antes de codar, valide com o usuário pendências e dúvidas em aberto.
+5. Se a sessão produzir mudanças, atualize este arquivo antes de resetar.
+
+---
+
+## Decisions Log (append-only)
+
+Registre decisões técnicas e escolhas de produto que NÃO devem ser revisitadas sem motivo. Use formato `YYYY-MM-DD — decisão (razão)`.
+
+### 2026-04
+- Stack escolhida: HTML/CSS/JS puro, sem build, sem backend (simplicidade + custo zero)
+- Storage local em `localStorage` chave única `fluxo/v2` (sync entre dispositivos NÃO é objetivo desta versão)
+- Áudio sem API: parser pt-BR via regex/keywords, sem Claude API (usuário não quer pagar API)
+- Notificações: per-task (X antes) + digests fixos 09h e 22h (decidido em sessão de planejamento)
+- Granularidade de rotina: dia (sem horários intra-dia) — decisão explícita do usuário
+- Rotinas: 1 ocorrência por vez no calendário; renovação manual após conclusão (suggested = done + interval)
+- Importância: 4 níveis (baixa/média/alta/crítica). Pesos no calendário: 1 / 6 / 10 / 30
+- Calendário: bola única por dia, tamanho/cor pelo score agregado (todas tarefas, incluindo rotinas baixas)
+
+### 2026-05
+- Tabs: Início (Lembrete + Pra hoje) / Pendentes / Calendário. Removidas: Concluídas como aba separada.
+- Home: 2 boxes de altura fixa (~50% cada), header congelado, scroll interno
+- Cards: 2 linhas máximo no corpo (título + tags). Crítica/data canto sup. dir.; freq/contador canto inf. dir.
+- Borda colorida pela importância (não barra lateral)
+- Modo escuro: automático via `prefers-color-scheme`. Sem toggle manual.
+- Filtros em Pendentes: 3 dropdowns (Tipo, Importância, Categoria) + toggle concluídas. Removidos: busca por texto.
+- Tags: 16 cores pastel, CRUD do usuário, default 6 tags pré-criadas
+- Modal de tarefa não auto-foca título (não abre teclado virtual no celular)
+- Ícone de frequência: ↻ pra repete, → pra única. Click mostra cadência via toast.
+- Animação de conclusão: burst de 14 partículas + colapso do card (440ms total)
+- Renovação de rotina: cancelar (X) restaura a tarefa; "não renovar" pausa (active:false)
+- Estrutura `.claude-ops/04_skills/` adicionada para skills carregadas sob demanda (token saver)
+- `CLAUDE_STATE.md` agora combina snapshot + decisions log (memória externa unificada)
+
+### Reservado pra próximas decisões
+<!-- Adicionar entradas datadas aqui ao tomar decisões -->
+
+---
+
+## Erros já cometidos / armadilhas a evitar
+
+- **Sticky header dentro de container errado**: `position: sticky` falha se o ancestral com `overflow: auto` não é o pai direto da hierarquia esperada. Sempre validar.
+- **Modal `display: flex` + `[hidden]`**: o flex sobrescreve hidden. Adicionar `.modal[hidden] { display: none; }`.
+- **`new Notification()` em Android Chrome**: lança exceção. Sempre via `serviceWorkerRegistration.showNotification()` em mobile.
+- **Cache do SW não invalida**: bumpa o nome (`fluxo-v2` → `fluxo-v3`) ao mudar JS/CSS, senão usuários ficam presos na versão antiga.
+- **Auto-focus em input dentro de modal**: dispara teclado virtual e cobre a tela. Evitar `.focus()` programático em mobile.

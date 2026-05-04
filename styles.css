@@ -17,10 +17,12 @@
   --imp-low: #a8c4dc;
   --imp-low-soft: #d8e4f0;
   --imp-low-tint: #eef3f8;
+  --imp-low-text: #6088a8;
 
   --imp-mid: #c9b896;
   --imp-mid-soft: #e6dcc6;
   --imp-mid-tint: #f5f0e3;
+  --imp-mid-text: #8a7548;
 
   --imp-high: #e0b48a;
   --imp-high-soft: #f0d8be;
@@ -59,10 +61,12 @@
     --imp-low: #7ea0bd;
     --imp-low-soft: #36495a;
     --imp-low-tint: #2a3742;
+    --imp-low-text: #c4d8e8;
 
     --imp-mid: #b09f7a;
     --imp-mid-soft: #4d4533;
     --imp-mid-tint: #3a3526;
+    --imp-mid-text: #d8c8a4;
 
     --imp-high: #d09a6a;
     --imp-high-soft: #5a432d;
@@ -223,7 +227,9 @@ body {
 .section--home {
   flex: 1 1 50%;
   max-height: 50%;
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: block;
 }
 
 .section--home h2 {
@@ -233,9 +239,6 @@ body {
 }
 
 .section--home .task-list {
-  flex: 1;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
   padding: 10px;
 }
 
@@ -378,8 +381,8 @@ body {
   letter-spacing: 0.3px;
   white-space: nowrap;
 }
-.crit-badge[data-imp="1"] { color: var(--imp-low); border-color: var(--imp-low); }
-.crit-badge[data-imp="2"] { color: var(--imp-mid); border-color: var(--imp-mid); }
+.crit-badge[data-imp="1"] { color: var(--imp-low-text); border-color: var(--imp-low); }
+.crit-badge[data-imp="2"] { color: var(--imp-mid-text); border-color: var(--imp-mid); }
 .crit-badge[data-imp="3"] { color: var(--imp-high-text); border-color: var(--imp-high); }
 .crit-badge[data-imp="4"] { color: var(--imp-crit-text); border-color: var(--imp-crit); }
 

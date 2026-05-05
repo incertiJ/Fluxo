@@ -226,21 +226,53 @@ body {
 
 .section--home {
   flex: 1 1 50%;
-  max-height: 50%;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  display: block;
 }
 
-.section--home h2 {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+.section--home.section--collapsed {
+  flex: 0 0 auto;
+  overflow: hidden;
 }
 
 .section--home .task-list {
   padding: 10px;
 }
+
+/* Collapsible section header (home + calendar inline) */
+.section-hdr {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+  border-radius: var(--radius) var(--radius) 0 0;
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.section-hdr h2 {
+  border-bottom: none;
+  border-radius: 0;
+  flex: 1;
+  background: transparent;
+}
+
+.section-toggle {
+  background: transparent;
+  border: none;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  border-radius: 0 var(--radius) 0 0;
+  flex-shrink: 0;
+}
+.section-toggle:hover { background: var(--surface-3); color: var(--text); }
 
 .empty {
   text-align: center;
@@ -910,6 +942,11 @@ body {
   border-color: var(--accent);
   background: var(--accent-3);
 }
+.cal-day.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+  background: var(--accent-3);
+}
 .cal-day .num { font-weight: 600; }
 
 .cal-dot {
@@ -919,8 +956,123 @@ body {
   flex-shrink: 0;
 }
 
-/* Sheet day list */
-#day-sheet-list .task { background: var(--surface-2); }
+/* ===== Shopping ===== */
+
+.shopping-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.shopping-add-btn { flex: 1; }
+
+.shopping-edit-btn {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  font-size: 1rem;
+}
+
+.shopping-category {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--cat-color, var(--accent));
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  flex-shrink: 0;
+}
+
+.shopping-cat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.shopping-cat-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.shopping-cat-name {
+  flex: 1;
+  font-weight: 600;
+  font-size: 0.98rem;
+}
+
+.shopping-cat-count {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  background: var(--surface-3);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.shopping-cat-chevron {
+  font-size: 0.72rem;
+  color: var(--text-soft);
+}
+
+.shopping-cat-body {
+  border-top: 1px solid var(--border);
+  padding: 6px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shopping-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.shopping-item:last-of-type { border-bottom: none; }
+
+.shopping-item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.shopping-item-name {
+  flex: 1;
+  font-size: 0.96rem;
+}
+
+.shopping-item.checked .shopping-item-name {
+  text-decoration: line-through;
+  color: var(--text-soft);
+}
+
+.shopping-add-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.shopping-add-row input[type="text"] {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+.shopping-add-row input[type="text"]:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
 
 /* Tag color grid */
 .tag-color-grid {

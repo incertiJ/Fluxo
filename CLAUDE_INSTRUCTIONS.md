@@ -61,6 +61,7 @@ Quando alterar código existente: forneça apenas o trecho mudado, com contexto 
 - Commits descritivos no formato: `tipo(escopo): mensagem` (feat, fix, refactor, chore, docs).
 - Push só após confirmação de que o trabalho está estável.
 - Não crie PR sem o usuário pedir explicitamente.
+- **Nomenclatura de branches**: novas branches seguem o modelo `claude/fluxo-vX.X-<slug>` onde X.X é a versão do produto (ex: `claude/fluxo-v2-shopping-categories`). Slug em kebab-case descrevendo o escopo da mudança.
 
 ### 10. Verificação após mudanças
 Sempre que mexer em JS/HTML/CSS:

@@ -25,6 +25,7 @@ const IMP_LABEL = { 1: "Baixa", 2: "Média", 3: "Alta", 4: "Crítica" };
 const state = {
   tasks: [],
   tags: [],
+  shopping: { categories: [] },
   view: "home",
   editingId: null,
   draftSubtasks: [],
@@ -34,6 +35,7 @@ const state = {
   installPrompt: null,
   filters: { type: "all", imp: "all", tagId: "all", showDone: false },
   calMonth: null,
+  calSelectedDate: null,
   monthPickerYear: null,
   pendingRenew: null,
   pendingRenewIds: new Set(),
@@ -41,6 +43,9 @@ const state = {
   editingTagDraft: null,
   editingDateTaskId: null,
   editingTagsTaskId: null,
+  homeCollapsed: { reminder: false, today: false },
+  editingCategoryId: null,
+  editingCategoryDraft: null,
 };
 
 /* ===== persistence ===== */
@@ -55,6 +60,7 @@ function load() {
       const data = JSON.parse(raw);
       state.tasks = data.tasks || [];
       state.tags = data.tags || [];
+      state.shopping = data.shopping || { categories: [] };
     }
   } catch {}
   if (!state.tags.length) {
@@ -69,7 +75,7 @@ function load() {
 }
 
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: state.tasks, tags: state.tags }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: state.tasks, tags: state.tags, shopping: state.shopping }));
 }
 
 function getNotified() {
@@ -211,6 +217,7 @@ function render() {
   if (state.view === "home") { view.classList.add("view--home"); renderHome(view); }
   else if (state.view === "pending") { view.classList.add("view--scrollable"); renderPending(view); }
   else if (state.view === "calendar") { view.classList.add("view--scrollable"); renderCalendar(view); }
+  else if (state.view === "shopping") { view.classList.add("view--scrollable"); renderShopping(view); }
 }
 
 function unique(arr, keyFn) {
@@ -230,7 +237,6 @@ function renderHome(root) {
   const oneoffs = state.tasks.filter(t => t.type === "oneoff" && !t.completed);
   const routines = state.tasks.filter(t => t.type === "routine" && !isRoutineHidden(t));
 
-  // Lembrete: pontuais (importantes sempre + próximas)
   const importantOneoffs = oneoffs.filter(t => t.importance >= 3);
   const closeOneoffs = oneoffs.filter(t => t.deadline)
     .sort((a, b) => a.deadline.localeCompare(b.deadline));
@@ -240,31 +246,38 @@ function renderHome(root) {
       return (a.deadline || "9999").localeCompare(b.deadline || "9999");
     });
 
-  // Pra hoje: rotinas com nextDue <= hoje (atrasadas + hoje)
   const todayRoutines = routines.filter(r => r.nextDue && r.nextDue <= today)
     .sort((a, b) => a.nextDue.localeCompare(b.nextDue));
 
-  const sec1 = el("section", { class: "section section--home" });
-  sec1.appendChild(el("h2", {}, "Lembrete"));
-  if (!homeOneoffs.length) {
-    sec1.appendChild(el("div", { class: "empty" }, "Nada pra lembrar."));
-  } else {
-    const list = el("div", { class: "task-list" });
-    homeOneoffs.forEach(t => list.appendChild(renderTaskCard(t)));
-    sec1.appendChild(list);
-  }
-  root.appendChild(sec1);
+  root.appendChild(makeHomeSection("reminder", "Lembrete", homeOneoffs, "Nada pra lembrar."));
+  root.appendChild(makeHomeSection("today", "Pra hoje", todayRoutines, "Sem rotinas pra hoje."));
+}
 
-  const sec2 = el("section", { class: "section section--home" });
-  sec2.appendChild(el("h2", {}, "Pra hoje"));
-  if (!todayRoutines.length) {
-    sec2.appendChild(el("div", { class: "empty" }, "Sem rotinas pra hoje."));
-  } else {
-    const list = el("div", { class: "task-list" });
-    todayRoutines.forEach(t => list.appendChild(renderTaskCard(t)));
-    sec2.appendChild(list);
+function makeHomeSection(key, title, tasks, emptyMsg) {
+  const collapsed = state.homeCollapsed[key];
+  const sec = el("section", { class: "section section--home" + (collapsed ? " section--collapsed" : "") });
+
+  const hdr = el("div", { class: "section-hdr" });
+  hdr.appendChild(el("h2", {}, title));
+  const toggle = el("button", { type: "button", class: "section-toggle" }, collapsed ? "▶" : "▼");
+  toggle.addEventListener("click", e => {
+    e.stopPropagation();
+    state.homeCollapsed[key] = !state.homeCollapsed[key];
+    render();
+  });
+  hdr.appendChild(toggle);
+  sec.appendChild(hdr);
+
+  if (!collapsed) {
+    if (!tasks.length) {
+      sec.appendChild(el("div", { class: "empty" }, emptyMsg));
+    } else {
+      const list = el("div", { class: "task-list" });
+      tasks.forEach(t => list.appendChild(renderTaskCard(t)));
+      sec.appendChild(list);
+    }
   }
-  root.appendChild(sec2);
+  return sec;
 }
 
 /* ===== Task card ===== */
@@ -495,12 +508,36 @@ function renderCalendar(root) {
     grid.appendChild(makeCalCell(y, m + 1, i, true));
   }
   root.appendChild(grid);
+
+  // Inline day panel (replaces blocking modal)
+  if (state.calSelectedDate) {
+    const items = tasksOnDate(state.calSelectedDate);
+    const panel = el("section", { class: "section" });
+    const panelHdr = el("div", { class: "section-hdr" });
+    const dateLabel = parseYMD(state.calSelectedDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
+    panelHdr.appendChild(el("h2", {}, dateLabel));
+    const closeBtn = el("button", { type: "button", class: "section-toggle" }, "×");
+    closeBtn.addEventListener("click", () => { state.calSelectedDate = null; render(); });
+    panelHdr.appendChild(closeBtn);
+    panel.appendChild(panelHdr);
+    if (!items.length) {
+      panel.appendChild(el("div", { class: "empty" }, "Nenhuma tarefa neste dia."));
+    } else {
+      const list = el("div", { class: "task-list" });
+      items.forEach(t => list.appendChild(renderTaskCard(t)));
+      panel.appendChild(list);
+    }
+    root.appendChild(panel);
+  }
 }
 
 function makeCalCell(y, m, d, outside) {
   const date = new Date(y, m, d);
   const ds = ymd(date);
-  const cell = el("div", { class: "cal-day" + (outside ? " outside" : "") + (ds === todayISO() ? " today" : "") });
+  const isSelected = ds === state.calSelectedDate;
+  const cell = el("div", {
+    class: "cal-day" + (outside ? " outside" : "") + (ds === todayISO() ? " today" : "") + (isSelected ? " selected" : "")
+  });
   cell.appendChild(el("div", { class: "num" }, String(date.getDate())));
   const items = tasksOnDate(ds);
   const score = items.reduce((s, t) => s + scoreFor(t), 0);
@@ -512,26 +549,11 @@ function makeCalCell(y, m, d, outside) {
     dotEl.style.background = dot.color;
     cell.appendChild(dotEl);
   }
-  cell.addEventListener("click", () => openDaySheet(ds));
-  return cell;
-}
-
-function openDaySheet(dateStr) {
-  const items = tasksOnDate(dateStr);
-  const sheet = document.getElementById("day-sheet");
-  document.getElementById("day-sheet-title").textContent = parseYMD(dateStr).toLocaleDateString("pt-BR", {
-    day: "2-digit", month: "long", year: "numeric"
+  cell.addEventListener("click", () => {
+    state.calSelectedDate = state.calSelectedDate === ds ? null : ds;
+    render();
   });
-  const list = document.getElementById("day-sheet-list");
-  list.innerHTML = "";
-  if (!items.length) {
-    list.appendChild(el("div", { class: "empty" }, "Nenhuma tarefa neste dia."));
-  } else {
-    const tl = el("div", { class: "task-list" });
-    items.forEach(t => tl.appendChild(renderTaskCard(t)));
-    list.appendChild(tl);
-  }
-  sheet.hidden = false;
+  return cell;
 }
 
 /* ===== Month/Year picker ===== */
@@ -555,6 +577,170 @@ function renderMonthPicker() {
       render();
     });
     grid.appendChild(b);
+  });
+}
+
+/* ===== Shopping ===== */
+
+function renderShopping(root) {
+  const cats = state.shopping.categories;
+
+  const toolbar = el("div", { class: "shopping-toolbar" });
+  const addBtn = el("button", { type: "button", class: "primary-btn shopping-add-btn" }, "+ Nova Categoria");
+  addBtn.addEventListener("click", () => openCategoryModal());
+  const editBtn = el("button", { type: "button", class: "ghost-btn shopping-edit-btn", title: "Gerenciar categorias" }, "✏️");
+  editBtn.addEventListener("click", () => openManageCategoriesModal());
+  toolbar.append(addBtn, editBtn);
+  root.appendChild(toolbar);
+
+  if (!cats.length) {
+    root.appendChild(el("div", { class: "empty" }, "Nenhuma categoria. Crie sua primeira categoria de compras."));
+    return;
+  }
+  cats.forEach(cat => root.appendChild(renderShoppingCategory(cat)));
+}
+
+function renderShoppingCategory(cat) {
+  const card = el("div", { class: "shopping-category" });
+  card.style.setProperty("--cat-color", cat.color);
+
+  const hdr = el("div", { class: "shopping-cat-header" });
+  hdr.addEventListener("click", () => {
+    cat.collapsed = !cat.collapsed;
+    save();
+    render();
+  });
+  const dot = el("span", { class: "shopping-cat-dot" });
+  dot.style.background = cat.color;
+  const name = el("span", { class: "shopping-cat-name" }, cat.name);
+  const unchecked = cat.items.filter(i => !i.checked).length;
+  const count = el("span", { class: "shopping-cat-count" }, `${unchecked}/${cat.items.length}`);
+  const toggle = el("span", { class: "shopping-cat-chevron" }, cat.collapsed ? "▶" : "▼");
+  hdr.append(dot, name, count, toggle);
+  card.appendChild(hdr);
+
+  if (!cat.collapsed) {
+    const body = el("div", { class: "shopping-cat-body" });
+    cat.items.forEach((item, i) => {
+      const row = el("div", { class: "shopping-item" + (item.checked ? " checked" : "") });
+      const cb = el("input", { type: "checkbox" });
+      cb.checked = item.checked;
+      cb.addEventListener("change", e => {
+        e.stopPropagation();
+        cat.items[i].checked = cb.checked;
+        save();
+        render();
+      });
+      const lbl = el("span", { class: "shopping-item-name" }, item.name);
+      const rm = el("button", { type: "button", class: "remove-btn" }, "×");
+      rm.addEventListener("click", e => {
+        e.stopPropagation();
+        cat.items.splice(i, 1);
+        save();
+        render();
+      });
+      row.append(cb, lbl, rm);
+      body.appendChild(row);
+    });
+
+    const addRow = el("div", { class: "shopping-add-row" });
+    const input = el("input", { type: "text", placeholder: "Adicionar item...", maxlength: "200" });
+    const doAdd = () => {
+      const v = input.value.trim();
+      if (!v) return;
+      cat.items.push({ id: uid(), name: v, checked: false });
+      input.value = "";
+      save();
+      render();
+    };
+    const addItemBtn = el("button", { type: "button", class: "ghost-btn" }, "+");
+    addItemBtn.addEventListener("click", doAdd);
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+    addRow.append(input, addItemBtn);
+    body.appendChild(addRow);
+    card.appendChild(body);
+  }
+  return card;
+}
+
+function openCategoryModal(id = null) {
+  state.editingCategoryId = id;
+  const cat = id ? state.shopping.categories.find(c => c.id === id) : null;
+  state.editingCategoryDraft = { name: cat?.name || "", color: cat?.color || TAG_COLORS[0] };
+  document.getElementById("cat-modal-title").textContent = id ? "Editar categoria" : "Nova categoria";
+  document.getElementById("cat-delete-btn").hidden = !id;
+  document.getElementById("cat-name").value = state.editingCategoryDraft.name;
+  renderCategoryColorGrid();
+  document.getElementById("cat-modal").hidden = false;
+}
+
+function closeCategoryModal() {
+  document.getElementById("cat-modal").hidden = true;
+  state.editingCategoryId = null;
+}
+
+function renderCategoryColorGrid() {
+  const grid = document.getElementById("cat-color-grid");
+  grid.innerHTML = "";
+  TAG_COLORS.forEach(c => {
+    const b = el("button", { type: "button" });
+    b.style.background = c;
+    if (c === state.editingCategoryDraft.color) b.classList.add("selected");
+    b.addEventListener("click", () => { state.editingCategoryDraft.color = c; renderCategoryColorGrid(); });
+    grid.appendChild(b);
+  });
+}
+
+function saveCategoryModal() {
+  const name = document.getElementById("cat-name").value.trim();
+  if (!name) { showToast("Informe um nome"); return; }
+  if (state.editingCategoryId) {
+    const cat = state.shopping.categories.find(c => c.id === state.editingCategoryId);
+    if (cat) { cat.name = name; cat.color = state.editingCategoryDraft.color; }
+  } else {
+    state.shopping.categories.push({ id: uid(), name, color: state.editingCategoryDraft.color, collapsed: false, items: [] });
+  }
+  save();
+  closeCategoryModal();
+  if (!document.getElementById("cat-manage-modal").hidden) renderCatManageList();
+  render();
+}
+
+function deleteCategoryModal() {
+  if (!confirm("Excluir esta categoria e todos os seus itens?")) return;
+  state.shopping.categories = state.shopping.categories.filter(c => c.id !== state.editingCategoryId);
+  save();
+  closeCategoryModal();
+  if (!document.getElementById("cat-manage-modal").hidden) renderCatManageList();
+  render();
+}
+
+function openManageCategoriesModal() {
+  renderCatManageList();
+  document.getElementById("cat-manage-modal").hidden = false;
+}
+
+function closeManageCategoriesModal() {
+  document.getElementById("cat-manage-modal").hidden = true;
+}
+
+function renderCatManageList() {
+  const ul = document.getElementById("cat-manage-list");
+  ul.innerHTML = "";
+  if (!state.shopping.categories.length) {
+    ul.appendChild(el("li", { class: "empty" }, "Nenhuma categoria criada."));
+    return;
+  }
+  state.shopping.categories.forEach(cat => {
+    const li = el("li");
+    const sw = el("span", { class: "tag-swatch" });
+    sw.style.background = cat.color;
+    li.append(sw, el("span", { class: "text" }, cat.name), el("span", { class: "hint" }, "editar"));
+    li.addEventListener("click", () => {
+      document.getElementById("cat-manage-modal").hidden = true;
+      openCategoryModal(cat.id);
+    });
+    ul.appendChild(li);
   });
 }
 
@@ -1301,7 +1487,7 @@ function checkDueNotifications() {
   const allIds = new Set(items.map(i => i.id));
   for (const it of items) {
     if (it.triggerMs <= now && !notified.has(it.id)) {
-      try { new Notification(it.title, { body: it.body, tag: it.id }); } catch {}
+      try { new Notification(it.title, { body: it.body, tag: it.id, icon: "./icon.svg" }); } catch {}
       notified.add(it.id);
     }
   }
@@ -1405,11 +1591,18 @@ function setupUI() {
   document.getElementById("renew-confirm-btn").addEventListener("click", confirmRenew);
   document.getElementById("renew-skip-btn").addEventListener("click", skipRenew);
 
-  document.getElementById("close-day-sheet").addEventListener("click", () => {
-    document.getElementById("day-sheet").hidden = true;
+  // Shopping: category modal
+  document.getElementById("close-cat-modal").addEventListener("click", closeCategoryModal);
+  document.getElementById("cat-modal").addEventListener("click", e => {
+    if (e.target.id === "cat-modal") closeCategoryModal();
   });
-  document.getElementById("day-sheet").addEventListener("click", e => {
-    if (e.target.id === "day-sheet") document.getElementById("day-sheet").hidden = true;
+  document.getElementById("cat-save-btn").addEventListener("click", saveCategoryModal);
+  document.getElementById("cat-delete-btn").addEventListener("click", deleteCategoryModal);
+
+  // Shopping: manage categories modal
+  document.getElementById("close-cat-manage").addEventListener("click", closeManageCategoriesModal);
+  document.getElementById("cat-manage-modal").addEventListener("click", e => {
+    if (e.target.id === "cat-manage-modal") closeManageCategoriesModal();
   });
 
   // Quick date

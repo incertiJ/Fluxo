@@ -12,14 +12,56 @@ Combina dois papéis:
 **Fluxo** — PWA estático (HTML/CSS/JS puro, sem build) de gestão de tarefas com tema pastel inspirado em rio. Roda local ou em GitHub Pages / Vercel. Storage em `localStorage`. Sem backend.
 
 **Repo**: `incertij/test-claude`
-**Branch ativa**: `claude/fluxo-v2`
-**Deploy**: GitHub Pages apontando pra esta branch.
+**Branch de desenvolvimento**: `claude/shopping-categories-refactor-MVqUs` (baseada em `claude/fluxo-v2`)
+**Branch de deploy**: `claude/fluxo-v2`
+**Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
+**Nomenclatura de branches**: `claude/fluxo-vX.X-<slug>` (ex: `claude/fluxo-v2-shopping-categories`)
 
 ---
 
 ## Status Atual (última sessão)
 
-### Implementado nesta iteração (v3, ainda não commitado no momento desta escrita — committed junto com este arquivo)
+### Implementado nesta iteração (shopping-categories-refactor, branch claude/shopping-categories-refactor-MVqUs)
+
+**Aba Compras (nova)**
+- Nova tab "Compras" no nav (`data-view="shopping"`)
+- Sistema de categorias: sem listas de compras — cada categoria É a lista
+- Cada categoria: nome, cor (paleta TAG_COLORS), lista de itens, estado collapsed/expanded
+- Categorias são clicáveis (header inteiro) para expandir/recolher
+- Itens: checkbox (marcar comprado), nome, botão remover
+- Adicionar itens inline por categoria (input + Enter ou botão +)
+- Toolbar alinhada: [+ Nova Categoria] [✏️ gerenciar] no mesmo `flex` row
+- Botão de editar categorias usa ícone de lápis (✏️), não engrenagem
+- Modal de criação/edição de categoria: nome + grade de cores (igual tags)
+- Modal de gerenciar categorias: lista clicável para editar/excluir
+
+**Home — seções redutíveis**
+- Seções "Lembrete" e "Pra hoje" agora têm botão ▼/▶ para colapsar/expandir
+- Estado em `state.homeCollapsed: { reminder, today }` (reset a cada sessão)
+- Seção colapsada: `flex: 0 0 auto`, mostra só o header
+- Seção expandida: `flex: 1 1 50%`, ocupa espaço disponível
+
+**Calendário — lista inline**
+- Clique em dia seleciona `state.calSelectedDate` (toggle: clique novamente deseleciona)
+- Dia selecionado: destaque visual com `box-shadow: 0 0 0 2px var(--accent)`
+- Tarefas do dia aparecem em painel inline abaixo da grade (nunca em modal bloqueante)
+- Painel tem botão × para fechar (deselecionar)
+- Removido: modal `day-sheet` do HTML; removidos handlers do setupUI
+
+**Notificações — logo do Fluxo**
+- Notificações inline (`new Notification`) agora incluem `icon: "./icon.svg"`
+- SW já tinha `icon: "./icon.svg"` desde versão anterior
+
+**Schema e estado**
+- `state.shopping = { categories: [] }` — nova chave de dados
+- `state.calSelectedDate: null` — dia selecionado no calendário
+- `state.homeCollapsed: { reminder, today }` — estado colapso das seções home
+- `state.editingCategoryId / editingCategoryDraft` — edição de categoria em curso
+- `save()` e `load()` atualizados para incluir `shopping`
+
+---
+
+### Implementado em iteração anterior (v3, committed em claude/fluxo-v2)
 
 **Tema e identidade**
 - Logo SVG estilo rio (3 curvas, gradiente água→menta sobre fundo creme)
@@ -223,6 +265,17 @@ Registre decisões técnicas e escolhas de produto que NÃO devem ser revisitada
 - Pra hoje = só `=== today`. Overdue não aparece na home (vai pra Pendentes).
 - Texto "Urgente: X horas restantes" para deadline ≤48h no futuro. Overdue continua "vencida há".
 - Tema: 3 estados (Auto/Claro/Escuro). Override via `:root[data-theme]`.
+
+### 2026-05 (shopping-categories-refactor)
+- Compras: modelo baseado em **categorias**, não listas. Cada categoria tem sua própria lista. Sem lista global de compras.
+- Categorias de compras: CRUD completo (criar/editar nome+cor/excluir), colapsáveis por clique no header
+- Cores de categorias: mesma paleta `TAG_COLORS` das tags de tarefa (16 pastéis)
+- Ícone de edição de categorias: ✏️ (lápis), não engrenagem — padrão mais intuitivo para edição
+- Toolbar da aba compras: 2 botões no mesmo flex row (+ Nova Categoria, ✏️ Gerenciar) — botão add flex:1, botão edit flex-shrink:0
+- Calendário: painel inline abaixo da grade, sem modal bloqueante. Clique no dia = toggle selecionado/deselect.
+- Home: seções Lembrete e Pra hoje são colapsáveis individualmente (▼/▶). Estado NÃO persiste no localStorage — reseta a cada sessão.
+- Notificações: logo do Fluxo incluída em todos os canais (inline + SW já tinha desde antes)
+- Nomenclatura de branches: `claude/fluxo-vX.X-<slug>` como padrão oficial
 
 ### Reservado pra próximas decisões
 <!-- Adicionar entradas datadas aqui ao tomar decisões -->

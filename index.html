@@ -23,6 +23,7 @@
     <button class="tab active" data-view="home" role="tab">Início</button>
     <button class="tab" data-view="pending" role="tab">Pendentes</button>
     <button class="tab" data-view="calendar" role="tab">Calendário</button>
+    <button class="tab" data-view="shopping" role="tab">Compras</button>
   </nav>
 
   <main id="view" class="view" aria-live="polite"></main>
@@ -262,14 +263,41 @@
     </div>
   </div>
 
-  <!-- Day sheet -->
-  <div id="day-sheet" class="modal" hidden>
-    <div class="modal-content">
+  <!-- Modal: Nova/Editar Categoria de Compras -->
+  <div id="cat-modal" class="modal" hidden>
+    <div class="modal-content small">
       <header class="modal-header">
-        <h2 id="day-sheet-title">Dia</h2>
-        <button id="close-day-sheet" class="icon-btn" aria-label="Fechar">×</button>
+        <h2 id="cat-modal-title">Nova categoria</h2>
+        <button id="close-cat-modal" class="icon-btn" aria-label="Fechar">×</button>
       </header>
-      <div id="day-sheet-list" class="task-form"></div>
+      <div class="task-form">
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" id="cat-name" maxlength="40" placeholder="Ex: Hortifrúti">
+        </label>
+        <fieldset class="field">
+          <legend>Cor</legend>
+          <div id="cat-color-grid" class="tag-color-grid"></div>
+        </fieldset>
+        <div class="modal-actions">
+          <button type="button" id="cat-delete-btn" class="danger-btn" hidden>Excluir</button>
+          <button type="button" id="cat-save-btn" class="primary-btn">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Gerenciar Categorias de Compras -->
+  <div id="cat-manage-modal" class="modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2>Categorias</h2>
+        <button id="close-cat-manage" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <ul id="cat-manage-list" class="tags-manage-list"></ul>
+        <p class="hint">Toque em uma categoria para editar nome ou cor.</p>
+      </div>
     </div>
   </div>
 

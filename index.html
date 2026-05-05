@@ -16,7 +16,10 @@
       <img src="./icon.svg" alt="" class="brand-icon" aria-hidden="true">
       <h1>Fluxo</h1>
     </div>
-    <button id="install-btn" class="install-btn" hidden>Instalar</button>
+    <div class="header-right">
+      <button id="test-notif-btn" class="test-notif-btn" title="Testar notificações" aria-label="Testar notificações">🔔</button>
+      <button id="install-btn" class="install-btn" hidden>Instalar</button>
+    </div>
   </header>
 
   <nav class="tabs" role="tablist">
@@ -271,6 +274,42 @@
         <button id="close-day-sheet" class="icon-btn" aria-label="Fechar">×</button>
       </header>
       <div id="day-sheet-list" class="task-form"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Nova lista de compras -->
+  <div id="shop-list-modal" class="modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2>Nova lista de compras</h2>
+        <button id="close-shop-list-modal" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <label class="field">
+          <span>Nome da lista</span>
+          <input type="text" id="new-shop-list-name" placeholder="Ex: Mercado" maxlength="80">
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="save-shop-list-btn" class="primary-btn">Criar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Testar notificação -->
+  <div id="test-notif-modal" class="modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2>Testar notificação</h2>
+        <button id="close-test-notif-modal" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <p class="hint">Escolha a notificação. Ela chega em 10 segundos.</p>
+        <div id="test-notif-options" class="test-notif-options"></div>
+        <div class="modal-actions">
+          <button type="button" id="send-test-notif-btn" class="primary-btn">Enviar em 10s</button>
+        </div>
+      </div>
     </div>
   </div>
 

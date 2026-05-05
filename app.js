@@ -24,12 +24,16 @@ const DEFAULT_TAGS = [
 const IMP_WEIGHT = { 1: 1, 2: 6, 3: 10, 4: 30 };
 const IMP_LABEL = { 1: "Baixa", 2: "Média", 3: "Alta", 4: "Crítica" };
 
+let _activeDropdown = null;
+
 const state = {
   tasks: [],
   tags: [],
   shopItems: [],
   shopCats: [],
-  shopFilter: "all",
+  shopLists: [],
+  shopFilters: new Set(),
+  expandedShopListIds: new Set(),
   view: "home",
   editingId: null,
   draftSubtasks: [],
@@ -37,7 +41,8 @@ const state = {
   draftTagIds: [],
   recognition: null,
   installPrompt: null,
-  filters: { type: "all", imp: "all", tagId: "all", showDone: false },
+  swReg: null,
+  filters: { types: new Set(), imps: new Set(), tagIds: new Set(), showDone: false },
   calMonth: null,
   monthPickerYear: null,
   pendingRenew: null,
@@ -62,6 +67,7 @@ function load() {
       state.tags = data.tags || [];
       state.shopItems = data.shopItems || [];
       state.shopCats = data.shopCats || [];
+      state.shopLists = data.shopLists || [];
     }
   } catch {}
   if (!state.tags.length) {
@@ -72,6 +78,12 @@ function load() {
     state.shopCats = DEFAULT_SHOP_CATS.map(n => ({ id: uid(), name: n }));
     save();
   }
+  // migrate shopItems → shopLists
+  if (!state.shopLists.length && state.shopItems.length) {
+    state.shopLists = [{ id: uid(), name: "Lista de compras", createdAt: new Date().toISOString(), items: state.shopItems.slice() }];
+    state.shopItems = [];
+    save();
+  }
   // migration: rotinas pausadas (active:false) foram removidas como conceito
   const before = state.tasks.length;
   state.tasks = state.tasks.filter(t => !(t.type === "routine" && t.active === false));
@@ -80,7 +92,7 @@ function load() {
 }
 
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: state.tasks, tags: state.tags, shopItems: state.shopItems, shopCats: state.shopCats }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: state.tasks, tags: state.tags, shopItems: state.shopItems, shopCats: state.shopCats, shopLists: state.shopLists }));
 }
 
 function getNotified() {
@@ -208,6 +220,7 @@ function setView(v) {
   state.view = v;
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.view === v));
   render();
+  if (v === "calendar") setTimeout(() => openDaySheet(todayISO()), 50);
 }
 
 function render() {
@@ -386,6 +399,63 @@ function renderTaskCard(t) {
   return card;
 }
 
+/* ===== Multi-select dropdown ===== */
+
+function makeMultiSelect(groupLabel, options, sel, onChange) {
+  const wrap = el("div", { class: "filter-group" });
+  if (groupLabel) wrap.appendChild(el("span", { class: "filter-label" }, groupLabel));
+  const cont = el("div", { class: "multi-select" });
+  const btn = el("button", { type: "button", class: "multi-select-btn" });
+
+  const refreshBtn = () => {
+    if (sel.size === 0) {
+      btn.textContent = "Todos";
+      btn.classList.remove("has-selection");
+    } else if (sel.size === 1) {
+      const v = [...sel][0];
+      btn.textContent = options.find(o => o.value === v)?.label || v;
+      btn.classList.add("has-selection");
+    } else {
+      btn.textContent = `${sel.size} selecionados`;
+      btn.classList.add("has-selection");
+    }
+  };
+  refreshBtn();
+
+  btn.addEventListener("click", e => {
+    e.stopPropagation();
+    if (_activeDropdown) {
+      const wasThisOne = cont.contains(_activeDropdown);
+      _activeDropdown.remove();
+      _activeDropdown = null;
+      if (wasThisOne) return;
+    }
+    const drop = el("div", { class: "multi-select-dropdown" });
+    options.forEach(opt => {
+      const row = el("div", { class: "multi-select-option" });
+      const cb = el("input", { type: "checkbox" });
+      cb.checked = sel.has(opt.value);
+      cb.addEventListener("change", () => {
+        if (cb.checked) sel.add(opt.value);
+        else sel.delete(opt.value);
+        refreshBtn();
+        onChange();
+      });
+      row.append(cb, document.createTextNode(opt.label));
+      row.addEventListener("click", evt => {
+        if (evt.target !== cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event("change")); }
+      });
+      drop.appendChild(row);
+    });
+    _activeDropdown = drop;
+    cont.appendChild(drop);
+  });
+
+  cont.appendChild(btn);
+  wrap.appendChild(cont);
+  return wrap;
+}
+
 /* ===== Pendentes ===== */
 
 function renderPending(root) {
@@ -393,42 +463,22 @@ function renderPending(root) {
 
   const filters = el("section", { class: "filters" });
 
-  const typeWrap = el("div", { class: "filter-group" });
-  typeWrap.appendChild(el("span", { class: "filter-label" }, "Tipo"));
-  const typeSel = el("select", { "aria-label": "Tipo" });
-  [["all", "Todos"], ["oneoff", "Pontuais"], ["routine", "Frequentes"]].forEach(([v, lbl]) => {
-    const o = el("option", { value: v }, lbl);
-    if (f.type === v) o.selected = true;
-    typeSel.appendChild(o);
-  });
-  typeSel.addEventListener("change", () => { f.type = typeSel.value; renderPendingList(listEl); });
-  typeWrap.appendChild(typeSel);
-  filters.appendChild(typeWrap);
+  filters.appendChild(makeMultiSelect("Tipo", [
+    { value: "oneoff", label: "Pontuais" },
+    { value: "routine", label: "Frequentes" }
+  ], f.types, () => renderPendingList(listEl)));
 
-  const impWrap = el("div", { class: "filter-group" });
-  impWrap.appendChild(el("span", { class: "filter-label" }, "Importância"));
-  const impSel = el("select", { "aria-label": "Importância" });
-  [["all", "Todas"], ["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
-    const o = el("option", { value: v }, lbl);
-    if (f.imp === v) o.selected = true;
-    impSel.appendChild(o);
-  });
-  impSel.addEventListener("change", () => { f.imp = impSel.value; renderPendingList(listEl); });
-  impWrap.appendChild(impSel);
-  filters.appendChild(impWrap);
+  filters.appendChild(makeMultiSelect("Importância", [
+    { value: "4", label: "Crítica" },
+    { value: "3", label: "Alta" },
+    { value: "2", label: "Média" },
+    { value: "1", label: "Baixa" }
+  ], f.imps, () => renderPendingList(listEl)));
 
-  const tagWrap = el("div", { class: "filter-group" });
-  tagWrap.appendChild(el("span", { class: "filter-label" }, "Categoria"));
-  const tagSel = el("select", { "aria-label": "Categoria" });
-  tagSel.appendChild(el("option", { value: "all" }, "Todas"));
-  state.tags.forEach(tag => {
-    const o = el("option", { value: tag.id }, tag.name);
-    if (f.tagId === tag.id) o.selected = true;
-    tagSel.appendChild(o);
-  });
-  tagSel.addEventListener("change", () => { f.tagId = tagSel.value; renderPendingList(listEl); });
-  tagWrap.appendChild(tagSel);
-  filters.appendChild(tagWrap);
+  filters.appendChild(makeMultiSelect("Categoria",
+    state.tags.map(tag => ({ value: tag.id, label: tag.name })),
+    f.tagIds, () => renderPendingList(listEl)
+  ));
 
   const showDoneBtn = el("button", { type: "button", class: "chip-toggle" + (f.showDone ? " active" : "") });
   showDoneBtn.textContent = "Concluídas";
@@ -451,9 +501,9 @@ function renderPendingList(container) {
   const f = state.filters;
   let items = state.tasks.slice();
   if (!f.showDone) items = items.filter(t => !t.completed && !isRoutineHidden(t));
-  if (f.type !== "all") items = items.filter(t => t.type === f.type);
-  if (f.imp !== "all") items = items.filter(t => String(t.importance) === f.imp);
-  if (f.tagId !== "all") items = items.filter(t => (t.tags || []).includes(f.tagId));
+  if (f.types.size > 0) items = items.filter(t => f.types.has(t.type));
+  if (f.imps.size > 0) items = items.filter(t => f.imps.has(String(t.importance)));
+  if (f.tagIds.size > 0) items = items.filter(t => (t.tags || []).some(id => f.tagIds.has(id)));
 
   const groups = { atrasadas: [], hoje: [], proximas: [], depois: [], semData: [], concluidas: [] };
   const today = todayISO();
@@ -1417,7 +1467,14 @@ function updateThemeBtns() {
 function setupUI() {
   document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
 
-  document.getElementById("add-btn").addEventListener("click", () => openTaskModal());
+  document.addEventListener("click", () => {
+    if (_activeDropdown) { _activeDropdown.remove(); _activeDropdown = null; }
+  });
+
+  document.getElementById("add-btn").addEventListener("click", () => {
+    if (state.view === "shopping") openNewShopListModal();
+    else openTaskModal();
+  });
   document.getElementById("close-modal").addEventListener("click", closeTaskModal);
   document.getElementById("modal").addEventListener("click", e => {
     if (e.target.id === "modal") closeTaskModal();
@@ -1502,6 +1559,27 @@ function setupUI() {
     state.monthPickerYear += 1; renderMonthPicker();
   });
 
+  // Test notification button
+  document.getElementById("test-notif-btn").addEventListener("click", openTestNotifModal);
+  document.getElementById("close-test-notif-modal").addEventListener("click", () => {
+    document.getElementById("test-notif-modal").hidden = true;
+  });
+  document.getElementById("test-notif-modal").addEventListener("click", e => {
+    if (e.target.id === "test-notif-modal") document.getElementById("test-notif-modal").hidden = true;
+  });
+
+  // New shopping list modal
+  document.getElementById("close-shop-list-modal").addEventListener("click", () => {
+    document.getElementById("shop-list-modal").hidden = true;
+  });
+  document.getElementById("shop-list-modal").addEventListener("click", e => {
+    if (e.target.id === "shop-list-modal") document.getElementById("shop-list-modal").hidden = true;
+  });
+  document.getElementById("save-shop-list-btn").addEventListener("click", createShopList);
+  document.getElementById("new-shop-list-name").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); createShopList(); }
+  });
+
   // Shopping categories modal
   document.getElementById("close-shop-cat-modal").addEventListener("click", closeShopCatModal);
   document.getElementById("shop-cat-modal").addEventListener("click", e => {
@@ -1545,81 +1623,119 @@ function setupUI() {
 /* ===== Shopping list ===== */
 
 function renderShopping(root) {
-  // Controls: add form + category filter
   const controls = el("section", { class: "section shop-controls" });
 
-  const addRow = el("div", { class: "row" });
-  const nameInput = el("input", { type: "text", id: "shop-item-input", placeholder: "Adicionar item…", maxlength: "200" });
-  const catSel = el("select", { id: "shop-item-cat-sel" });
-  catSel.appendChild(el("option", { value: "" }, "Sem categoria"));
-  state.shopCats.forEach(c => {
-    const o = el("option", { value: c.id }, c.name);
-    if (state.shopFilter !== "all" && c.id === state.shopFilter) o.selected = true;
-    catSel.appendChild(o);
-  });
-  const addBtn = el("button", { type: "button", class: "primary-btn" }, "+");
-  const doAdd = () => {
-    const name = nameInput.value.trim();
-    if (!name) return;
-    state.shopItems.push({ id: uid(), name, catId: catSel.value || null, done: false, createdAt: new Date().toISOString() });
-    save(); render();
-  };
-  addBtn.addEventListener("click", doAdd);
-  nameInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
-  addRow.append(nameInput, catSel, addBtn);
-  controls.appendChild(addRow);
-
-  const catBar = el("div", { class: "shop-cat-bar" });
-  const allChip = el("button", { type: "button", class: "shop-cat-chip" + (state.shopFilter === "all" ? " active" : "") });
-  allChip.textContent = "Todos";
-  allChip.addEventListener("click", () => { state.shopFilter = "all"; render(); });
-  catBar.appendChild(allChip);
-  state.shopCats.forEach(c => {
-    const chip = el("button", { type: "button", class: "shop-cat-chip" + (state.shopFilter === c.id ? " active" : "") });
-    chip.textContent = c.name;
-    chip.addEventListener("click", () => { state.shopFilter = c.id; render(); });
-    catBar.appendChild(chip);
-  });
-  const mngBtn = el("button", { type: "button", class: "shop-cat-chip mng" });
+  const filterRow = el("div", { class: "shop-filters" });
+  filterRow.appendChild(makeMultiSelect("Categoria",
+    state.shopCats.map(c => ({ value: c.id, label: c.name })),
+    state.shopFilters, () => render()
+  ));
+  const mngBtn = el("button", { type: "button", class: "ghost-btn small" });
+  mngBtn.title = "Gerenciar categorias";
   mngBtn.textContent = "⚙";
   mngBtn.addEventListener("click", openShopCatModal);
-  catBar.appendChild(mngBtn);
-  controls.appendChild(catBar);
+  filterRow.appendChild(mngBtn);
+  controls.appendChild(filterRow);
   root.appendChild(controls);
 
-  // Items
-  let items = state.shopItems.slice();
-  if (state.shopFilter !== "all") items = items.filter(i => i.catId === state.shopFilter);
-  const undone = items.filter(i => !i.done);
-  const done = items.filter(i => i.done);
+  if (!state.shopLists.length) {
+    root.appendChild(el("div", { class: "empty" }, "Nenhuma lista. Toque + para criar."));
+    return;
+  }
+  state.shopLists.forEach(list => root.appendChild(renderShopListCard(list)));
+}
 
-  const listEl = el("div", { class: "shop-list" });
+function renderShopListCard(list) {
+  const isExpanded = state.expandedShopListIds.has(list.id);
+  const allItems = list.items || [];
+  const visibleItems = state.shopFilters.size > 0
+    ? allItems.filter(i => i.catId && state.shopFilters.has(i.catId))
+    : allItems;
+  const pendingCount = allItems.filter(i => !i.done).length;
+  const totalCount = allItems.length;
+
+  const card = el("section", { class: "section shop-list-card" });
+
+  const header = el("div", { class: "shop-list-header" });
+  header.appendChild(el("div", { class: "shop-list-title" }, list.name));
+  const meta = totalCount === 0 ? "Vazia"
+    : `${pendingCount} pendente${pendingCount !== 1 ? "s" : ""} · ${totalCount} total`;
+  header.appendChild(el("div", { class: "shop-list-meta" }, meta));
+  header.appendChild(el("div", { class: "shop-list-toggle" }, isExpanded ? "▴" : "▾"));
+  header.addEventListener("click", () => {
+    if (state.expandedShopListIds.has(list.id)) state.expandedShopListIds.delete(list.id);
+    else state.expandedShopListIds.add(list.id);
+    render();
+  });
+  card.appendChild(header);
+
+  if (!isExpanded) return card;
+
+  const body = el("div", { class: "shop-list-body" });
+
+  const undone = visibleItems.filter(i => !i.done);
+  const done = visibleItems.filter(i => i.done);
+
   if (!undone.length && !done.length) {
-    listEl.appendChild(el("div", { class: "empty" }, "Lista vazia. Adicione itens acima."));
+    body.appendChild(el("div", { class: "empty" },
+      state.shopFilters.size > 0 ? "Nenhum item nesta categoria." : "Lista vazia."
+    ));
   } else {
-    undone.forEach(item => listEl.appendChild(renderShopItem(item)));
+    undone.forEach(item => body.appendChild(renderShopItem(item, list.id)));
     if (done.length) {
-      const doneDiv = el("div", { class: "shop-done-section" });
-      doneDiv.appendChild(el("div", { class: "shop-done-header" }, `Concluídos (${done.length})`));
-      done.forEach(item => doneDiv.appendChild(renderShopItem(item)));
+      const doneSection = el("div", { class: "shop-done-section" });
+      doneSection.appendChild(el("div", { class: "shop-done-header" }, `Concluídos (${done.length})`));
+      done.forEach(item => doneSection.appendChild(renderShopItem(item, list.id)));
       const clearBtn = el("button", { type: "button", class: "ghost-btn small" });
       clearBtn.textContent = "Limpar concluídos";
       clearBtn.addEventListener("click", () => {
-        if (state.shopFilter === "all") {
-          state.shopItems = state.shopItems.filter(i => !i.done);
-        } else {
-          state.shopItems = state.shopItems.filter(i => !(i.done && i.catId === state.shopFilter));
-        }
+        list.items = state.shopFilters.size > 0
+          ? allItems.filter(i => !(i.done && state.shopFilters.has(i.catId)))
+          : allItems.filter(i => !i.done);
         save(); render();
       });
-      doneDiv.appendChild(clearBtn);
-      listEl.appendChild(doneDiv);
+      doneSection.appendChild(clearBtn);
+      body.appendChild(doneSection);
     }
   }
-  root.appendChild(listEl);
+
+  const addRow = el("div", { class: "row shop-add-row" });
+  const nameInput = el("input", { type: "text", placeholder: "Novo item…", maxlength: "200" });
+  const catSel = el("select");
+  catSel.appendChild(el("option", { value: "" }, "Sem categoria"));
+  state.shopCats.forEach(c => {
+    const o = el("option", { value: c.id }, c.name);
+    if (state.shopFilters.size === 1 && state.shopFilters.has(c.id)) o.selected = true;
+    catSel.appendChild(o);
+  });
+  const addItemBtn = el("button", { type: "button", class: "primary-btn" }, "+");
+  const doAdd = () => {
+    const name = nameInput.value.trim();
+    if (!name) return;
+    list.items = list.items || [];
+    list.items.push({ id: uid(), name, catId: catSel.value || null, done: false, createdAt: new Date().toISOString() });
+    save(); render();
+  };
+  addItemBtn.addEventListener("click", doAdd);
+  nameInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+  addRow.append(nameInput, catSel, addItemBtn);
+  body.appendChild(addRow);
+
+  const delBtn = el("button", { type: "button", class: "danger-btn shop-list-del-btn" });
+  delBtn.textContent = "Excluir lista";
+  delBtn.addEventListener("click", () => {
+    if (!confirm(`Excluir a lista "${list.name}"?`)) return;
+    state.shopLists = state.shopLists.filter(l => l.id !== list.id);
+    state.expandedShopListIds.delete(list.id);
+    save(); render();
+  });
+  body.appendChild(delBtn);
+
+  card.appendChild(body);
+  return card;
 }
 
-function renderShopItem(item) {
+function renderShopItem(item, listId) {
   const cat = item.catId ? state.shopCats.find(c => c.id === item.catId) : null;
   const row = el("article", { class: "shop-item" + (item.done ? " done" : "") });
   const cb = el("input", { type: "checkbox" });
@@ -1633,10 +1749,31 @@ function renderShopItem(item) {
   const right = el("div", { class: "shop-item-right" });
   if (cat) right.appendChild(el("span", { class: "shop-cat-badge" }, cat.name));
   const delBtn = el("button", { type: "button", class: "remove-btn" }, "×");
-  delBtn.addEventListener("click", e => { e.stopPropagation(); state.shopItems = state.shopItems.filter(i => i.id !== item.id); save(); render(); });
+  delBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    const list = state.shopLists.find(l => l.id === listId);
+    if (list) list.items = list.items.filter(i => i.id !== item.id);
+    save(); render();
+  });
   right.appendChild(delBtn);
   row.append(cb, name, right);
   return row;
+}
+
+function openNewShopListModal() {
+  document.getElementById("new-shop-list-name").value = "";
+  document.getElementById("shop-list-modal").hidden = false;
+}
+
+function createShopList() {
+  const input = document.getElementById("new-shop-list-name");
+  const name = input.value.trim();
+  if (!name) return;
+  const newList = { id: uid(), name, createdAt: new Date().toISOString(), items: [] };
+  state.shopLists.push(newList);
+  state.expandedShopListIds.add(newList.id);
+  save(); render();
+  document.getElementById("shop-list-modal").hidden = true;
 }
 
 function openShopCatModal() {
@@ -1674,9 +1811,78 @@ function addShopCat() {
   save(); renderShopCatList();
 }
 
+async function openTestNotifModal() {
+  const today = todayISO();
+  const tmrw = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return ymd(d); })();
+  const getBody = dateStr => {
+    const items = tasksOnDate(dateStr).filter(t => !t.silentNotifications);
+    return items.length ? items.slice(0, 5).map(t => `• ${t.title}`).join("\n") : "(nenhuma tarefa)";
+  };
+  const options = [
+    { id: "morning", title: "Suas tarefas de hoje", body: getBody(today) },
+    { id: "evening", title: "Tarefas de amanhã", body: getBody(tmrw) },
+    { id: "simple", title: "Fluxo", body: "Notificação de teste. Funcionando! ✓" }
+  ];
+
+  const listEl = document.getElementById("test-notif-options");
+  listEl.innerHTML = "";
+  let selectedId = options[0].id;
+
+  const updateSelection = () => {
+    listEl.querySelectorAll(".test-notif-option").forEach(el => {
+      el.classList.toggle("selected", el.querySelector("input").value === selectedId);
+    });
+  };
+
+  options.forEach(opt => {
+    const item = el("div", { class: "test-notif-option" + (opt.id === selectedId ? " selected" : "") });
+    const rb = el("input", { type: "radio", name: "test-notif", value: opt.id });
+    rb.checked = opt.id === selectedId;
+    rb.addEventListener("change", () => { selectedId = opt.id; updateSelection(); });
+    const info = el("div", { class: "test-notif-info" });
+    info.appendChild(el("strong", {}, opt.title));
+    info.appendChild(el("small", {}, opt.body));
+    item.append(rb, info);
+    item.addEventListener("click", () => { rb.checked = true; selectedId = opt.id; updateSelection(); });
+    listEl.appendChild(item);
+  });
+
+  const oldBtn = document.getElementById("send-test-notif-btn");
+  const btn = oldBtn.cloneNode(true);
+  oldBtn.replaceWith(btn);
+  btn.textContent = "Enviar em 10s";
+  btn.disabled = false;
+
+  btn.addEventListener("click", async () => {
+    const granted = await ensureNotif();
+    if (!granted) { showToast("Permissão de notificação negada"); return; }
+    const opt = options.find(o => o.id === selectedId);
+    if (!opt) return;
+    document.getElementById("test-notif-modal").hidden = true;
+    let n = 10;
+    showToast(`Notificação em ${n}s…`, 1100);
+    const iv = setInterval(() => {
+      n--;
+      if (n > 0) showToast(`Notificação em ${n}s…`, 1100);
+      else { clearInterval(iv); sendTestNotif(opt); }
+    }, 1000);
+  });
+
+  document.getElementById("test-notif-modal").hidden = false;
+}
+
+async function sendTestNotif(opt) {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(opt.title, { body: opt.body, icon: "./icon.svg", badge: "./icon.svg" });
+  } catch {
+    try { new Notification(opt.title, { body: opt.body }); } catch {}
+  }
+}
+
 async function registerSW() {
   if (!("serviceWorker" in navigator)) return;
-  try { await navigator.serviceWorker.register("./sw.js"); } catch {}
+  try { state.swReg = await navigator.serviceWorker.register("./sw.js"); } catch {}
 }
 
 async function init() {

@@ -10,6 +10,8 @@ const TAG_COLORS = [
   "#c8a8a0", "#d8c4b0", "#a8b8c4", "#d8d4c0"
 ];
 
+const DEFAULT_SHOP_CATS = ["Mercado", "Roupas", "Acessórios", "Tech"];
+
 const DEFAULT_TAGS = [
   { name: "Limpeza", color: "#b8d9c4" },
   { name: "Viagem", color: "#a8c8e0" },
@@ -25,6 +27,9 @@ const IMP_LABEL = { 1: "Baixa", 2: "Média", 3: "Alta", 4: "Crítica" };
 const state = {
   tasks: [],
   tags: [],
+  shopItems: [],
+  shopCats: [],
+  shopFilter: "all",
   view: "home",
   editingId: null,
   draftSubtasks: [],
@@ -55,10 +60,16 @@ function load() {
       const data = JSON.parse(raw);
       state.tasks = data.tasks || [];
       state.tags = data.tags || [];
+      state.shopItems = data.shopItems || [];
+      state.shopCats = data.shopCats || [];
     }
   } catch {}
   if (!state.tags.length) {
     state.tags = DEFAULT_TAGS.map(t => ({ id: uid(), name: t.name, color: t.color }));
+    save();
+  }
+  if (!state.shopCats.length) {
+    state.shopCats = DEFAULT_SHOP_CATS.map(n => ({ id: uid(), name: n }));
     save();
   }
   // migration: rotinas pausadas (active:false) foram removidas como conceito
@@ -69,7 +80,7 @@ function load() {
 }
 
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: state.tasks, tags: state.tags }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: state.tasks, tags: state.tags, shopItems: state.shopItems, shopCats: state.shopCats }));
 }
 
 function getNotified() {
@@ -211,6 +222,7 @@ function render() {
   if (state.view === "home") { view.classList.add("view--home"); renderHome(view); }
   else if (state.view === "pending") { view.classList.add("view--scrollable"); renderPending(view); }
   else if (state.view === "calendar") { view.classList.add("view--scrollable"); renderCalendar(view); }
+  else if (state.view === "shopping") { view.classList.add("view--scrollable"); renderShopping(view); }
 }
 
 function unique(arr, keyFn) {
@@ -343,7 +355,7 @@ function renderTaskCard(t) {
   if (t.type === "routine") {
     freqIcon.textContent = "↻";
   } else {
-    freqIcon.innerHTML = `<svg viewBox="0 0 14 14" width="14" height="14" fill="none" aria-hidden="true"><line x1="2.5" y1="1" x2="2.5" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5,1.5 L9.5,1.2 C11,3 11,6 9.5,7.8 L2.5,7.5 Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>`;
+    freqIcon.innerHTML = `<svg viewBox="0 0 14 14" width="13" height="13" fill="none" aria-hidden="true"><line x1="2.5" y1="1" x2="2.5" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5,1.5 L11,4.5 L2.5,7.5 Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>`;
   }
   freqIcon.addEventListener("click", e => {
     e.stopPropagation();
@@ -1490,6 +1502,16 @@ function setupUI() {
     state.monthPickerYear += 1; renderMonthPicker();
   });
 
+  // Shopping categories modal
+  document.getElementById("close-shop-cat-modal").addEventListener("click", closeShopCatModal);
+  document.getElementById("shop-cat-modal").addEventListener("click", e => {
+    if (e.target.id === "shop-cat-modal") closeShopCatModal();
+  });
+  document.getElementById("add-shop-cat-btn").addEventListener("click", addShopCat);
+  document.getElementById("new-shop-cat").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); addShopCat(); }
+  });
+
   // Theme picker
   document.querySelector(".brand").addEventListener("click", () => {
     updateThemeBtns();
@@ -1518,6 +1540,138 @@ function setupUI() {
   document.getElementById("new-task-tag").addEventListener("keydown", e => {
     if (e.key === "Enter") { e.preventDefault(); createTaskTag(); }
   });
+}
+
+/* ===== Shopping list ===== */
+
+function renderShopping(root) {
+  // Controls: add form + category filter
+  const controls = el("section", { class: "section shop-controls" });
+
+  const addRow = el("div", { class: "row" });
+  const nameInput = el("input", { type: "text", id: "shop-item-input", placeholder: "Adicionar item…", maxlength: "200" });
+  const catSel = el("select", { id: "shop-item-cat-sel" });
+  catSel.appendChild(el("option", { value: "" }, "Sem categoria"));
+  state.shopCats.forEach(c => {
+    const o = el("option", { value: c.id }, c.name);
+    if (state.shopFilter !== "all" && c.id === state.shopFilter) o.selected = true;
+    catSel.appendChild(o);
+  });
+  const addBtn = el("button", { type: "button", class: "primary-btn" }, "+");
+  const doAdd = () => {
+    const name = nameInput.value.trim();
+    if (!name) return;
+    state.shopItems.push({ id: uid(), name, catId: catSel.value || null, done: false, createdAt: new Date().toISOString() });
+    save(); render();
+  };
+  addBtn.addEventListener("click", doAdd);
+  nameInput.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+  addRow.append(nameInput, catSel, addBtn);
+  controls.appendChild(addRow);
+
+  const catBar = el("div", { class: "shop-cat-bar" });
+  const allChip = el("button", { type: "button", class: "shop-cat-chip" + (state.shopFilter === "all" ? " active" : "") });
+  allChip.textContent = "Todos";
+  allChip.addEventListener("click", () => { state.shopFilter = "all"; render(); });
+  catBar.appendChild(allChip);
+  state.shopCats.forEach(c => {
+    const chip = el("button", { type: "button", class: "shop-cat-chip" + (state.shopFilter === c.id ? " active" : "") });
+    chip.textContent = c.name;
+    chip.addEventListener("click", () => { state.shopFilter = c.id; render(); });
+    catBar.appendChild(chip);
+  });
+  const mngBtn = el("button", { type: "button", class: "shop-cat-chip mng" });
+  mngBtn.textContent = "⚙";
+  mngBtn.addEventListener("click", openShopCatModal);
+  catBar.appendChild(mngBtn);
+  controls.appendChild(catBar);
+  root.appendChild(controls);
+
+  // Items
+  let items = state.shopItems.slice();
+  if (state.shopFilter !== "all") items = items.filter(i => i.catId === state.shopFilter);
+  const undone = items.filter(i => !i.done);
+  const done = items.filter(i => i.done);
+
+  const listEl = el("div", { class: "shop-list" });
+  if (!undone.length && !done.length) {
+    listEl.appendChild(el("div", { class: "empty" }, "Lista vazia. Adicione itens acima."));
+  } else {
+    undone.forEach(item => listEl.appendChild(renderShopItem(item)));
+    if (done.length) {
+      const doneDiv = el("div", { class: "shop-done-section" });
+      doneDiv.appendChild(el("div", { class: "shop-done-header" }, `Concluídos (${done.length})`));
+      done.forEach(item => doneDiv.appendChild(renderShopItem(item)));
+      const clearBtn = el("button", { type: "button", class: "ghost-btn small" });
+      clearBtn.textContent = "Limpar concluídos";
+      clearBtn.addEventListener("click", () => {
+        if (state.shopFilter === "all") {
+          state.shopItems = state.shopItems.filter(i => !i.done);
+        } else {
+          state.shopItems = state.shopItems.filter(i => !(i.done && i.catId === state.shopFilter));
+        }
+        save(); render();
+      });
+      doneDiv.appendChild(clearBtn);
+      listEl.appendChild(doneDiv);
+    }
+  }
+  root.appendChild(listEl);
+}
+
+function renderShopItem(item) {
+  const cat = item.catId ? state.shopCats.find(c => c.id === item.catId) : null;
+  const row = el("article", { class: "shop-item" + (item.done ? " done" : "") });
+  const cb = el("input", { type: "checkbox" });
+  cb.checked = item.done;
+  cb.addEventListener("click", e => {
+    e.stopPropagation();
+    item.done = !item.done;
+    save(); render();
+  });
+  const name = el("span", { class: "shop-item-name" }, item.name);
+  const right = el("div", { class: "shop-item-right" });
+  if (cat) right.appendChild(el("span", { class: "shop-cat-badge" }, cat.name));
+  const delBtn = el("button", { type: "button", class: "remove-btn" }, "×");
+  delBtn.addEventListener("click", e => { e.stopPropagation(); state.shopItems = state.shopItems.filter(i => i.id !== item.id); save(); render(); });
+  right.appendChild(delBtn);
+  row.append(cb, name, right);
+  return row;
+}
+
+function openShopCatModal() {
+  renderShopCatList();
+  document.getElementById("shop-cat-modal").hidden = false;
+}
+function closeShopCatModal() { document.getElementById("shop-cat-modal").hidden = true; }
+
+function renderShopCatList() {
+  const ul = document.getElementById("shop-cats-list");
+  ul.innerHTML = "";
+  state.shopCats.forEach(c => {
+    const li = el("li");
+    li.append(el("span", { class: "text" }, c.name));
+    const del = el("button", { type: "button", class: "remove-btn" }, "×");
+    del.addEventListener("click", () => {
+      if (!confirm(`Excluir a categoria "${c.name}"? Os itens associados ficam sem categoria.`)) return;
+      state.shopItems.forEach(i => { if (i.catId === c.id) i.catId = null; });
+      state.shopCats = state.shopCats.filter(x => x.id !== c.id);
+      if (state.shopFilter === c.id) state.shopFilter = "all";
+      save(); renderShopCatList();
+    });
+    li.appendChild(del);
+    ul.appendChild(li);
+  });
+}
+
+function addShopCat() {
+  const input = document.getElementById("new-shop-cat");
+  const name = input.value.trim();
+  if (!name) return;
+  if (state.shopCats.some(c => c.name.toLowerCase() === name.toLowerCase())) { showToast("Categoria já existe"); return; }
+  state.shopCats.push({ id: uid(), name });
+  input.value = "";
+  save(); renderShopCatList();
 }
 
 async function registerSW() {

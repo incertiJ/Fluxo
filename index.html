@@ -23,6 +23,7 @@
     <button class="tab active" data-view="home" role="tab">Início</button>
     <button class="tab" data-view="pending" role="tab">Pendentes</button>
     <button class="tab" data-view="calendar" role="tab">Calendário</button>
+    <button class="tab" data-view="shopping" role="tab">Compras</button>
   </nav>
 
   <main id="view" class="view" aria-live="polite"></main>
@@ -270,6 +271,23 @@
         <button id="close-day-sheet" class="icon-btn" aria-label="Fechar">×</button>
       </header>
       <div id="day-sheet-list" class="task-form"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Categorias de compras -->
+  <div id="shop-cat-modal" class="modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2>Categorias de compras</h2>
+        <button id="close-shop-cat-modal" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <ul id="shop-cats-list" class="tags-manage-list"></ul>
+        <div class="row">
+          <input type="text" id="new-shop-cat" placeholder="Nova categoria" maxlength="40">
+          <button type="button" id="add-shop-cat-btn" class="primary-btn">Criar</button>
+        </div>
+      </div>
     </div>
   </div>
 

@@ -38,17 +38,13 @@
       </header>
 
       <form id="task-form" class="task-form">
-        <div class="voice-row">
-          <button type="button" id="mic-btn" class="mic-btn" aria-label="Gravar áudio">
-            <span class="mic-icon">🎤</span>
-            <span class="mic-label">Falar</span>
-          </button>
-          <span id="mic-status" class="mic-status"></span>
-        </div>
-
         <label class="field">
           <span>Título</span>
-          <input type="text" id="title" required maxlength="200" placeholder="Ex: Regar plantas">
+          <div class="title-input-wrapper">
+            <input type="text" id="title" required maxlength="200" placeholder="Ex: Regar plantas">
+            <button type="button" id="mic-btn" class="mic-inline" aria-label="Gravar áudio">🎤</button>
+          </div>
+          <span id="mic-status" class="mic-status"></span>
         </label>
 
         <label class="field">
@@ -64,7 +60,7 @@
           </label>
           <label class="radio">
             <input type="radio" name="type" value="routine">
-            <span>Se repete</span>
+            <span>Frequentes</span>
           </label>
         </fieldset>
 
@@ -121,6 +117,10 @@
 
         <fieldset class="field">
           <legend>Notificações</legend>
+          <label class="silent-notif-row">
+            <input type="checkbox" id="silent-notif">
+            <span>Sem notificações (silenciar esta tarefa)</span>
+          </label>
           <ul id="notifications-list" class="notifications-list"></ul>
           <div class="row">
             <input type="number" id="notif-amount" min="0" max="9999" value="1">
@@ -270,6 +270,21 @@
         <button id="close-day-sheet" class="icon-btn" aria-label="Fechar">×</button>
       </header>
       <div id="day-sheet-list" class="task-form"></div>
+    </div>
+  </div>
+
+  <!-- Theme picker -->
+  <div id="theme-modal" class="modal popover-modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2>Tema</h2>
+        <button id="close-theme-modal" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form theme-picker">
+        <button type="button" class="theme-btn" data-theme-val="auto">Auto</button>
+        <button type="button" class="theme-btn" data-theme-val="light">Claro</button>
+        <button type="button" class="theme-btn" data-theme-val="dark">Escuro</button>
+      </div>
     </div>
   </div>
 

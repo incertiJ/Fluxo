@@ -234,15 +234,24 @@ function renderHome(root) {
   const importantOneoffs = oneoffs.filter(t => t.importance >= 3);
   const closeOneoffs = oneoffs.filter(t => t.deadline)
     .sort((a, b) => a.deadline.localeCompare(b.deadline));
+  const urgentRank = t => {
+    if (!t.deadline) return 2;
+    const d = diffDays(t.deadline, today);
+    return (d >= 0 && d <= 2) ? 0 : 1;
+  };
   const homeOneoffs = unique([...importantOneoffs, ...closeOneoffs], t => t.id)
     .sort((a, b) => {
+      const ur = urgentRank(a) - urgentRank(b);
+      if (ur !== 0) return ur;
       if (a.importance !== b.importance) return b.importance - a.importance;
       return (a.deadline || "9999").localeCompare(b.deadline || "9999");
     });
 
-  // Pra hoje: rotinas com nextDue <= hoje (atrasadas + hoje)
-  const todayRoutines = routines.filter(r => r.nextDue && r.nextDue <= today)
-    .sort((a, b) => a.nextDue.localeCompare(b.nextDue));
+  // Pra hoje: rotinas devidas hoje ou atrasadas + pontuais com deadline === hoje, ordem desc importância
+  const todayTasks = [
+    ...routines.filter(r => r.nextDue && r.nextDue <= today),
+    ...oneoffs.filter(t => t.deadline === today),
+  ].sort((a, b) => b.importance - a.importance);
 
   const sec1 = el("section", { class: "section section--home" });
   sec1.appendChild(el("h2", {}, "Lembrete"));
@@ -257,11 +266,11 @@ function renderHome(root) {
 
   const sec2 = el("section", { class: "section section--home" });
   sec2.appendChild(el("h2", {}, "Pra hoje"));
-  if (!todayRoutines.length) {
-    sec2.appendChild(el("div", { class: "empty" }, "Sem rotinas pra hoje."));
+  if (!todayTasks.length) {
+    sec2.appendChild(el("div", { class: "empty" }, "Nada pra hoje."));
   } else {
     const list = el("div", { class: "task-list" });
-    todayRoutines.forEach(t => list.appendChild(renderTaskCard(t)));
+    todayTasks.forEach(t => list.appendChild(renderTaskCard(t)));
     sec2.appendChild(list);
   }
   root.appendChild(sec2);
@@ -311,8 +320,19 @@ function renderTaskCard(t) {
   const dateStr = t.type === "oneoff" ? t.deadline : t.nextDue;
   if (dateStr) {
     const overdue = isOverdue(t);
-    const dateEl = el("div", { class: "task-date" + (overdue ? " overdue" : "") });
-    dateEl.innerHTML = `${fmtDateBR(dateStr)}<br><small>${fmtRelativeDays(dateStr)}</small>`;
+    const d = diffDays(dateStr, todayISO());
+    const urgent = !overdue && d >= 0 && d <= 2;
+    const dateEl = el("div", { class: "task-date" + (overdue ? " overdue" : urgent ? " urgent" : "") });
+    let subText;
+    if (urgent) {
+      const deadlineEnd = parseYMD(dateStr);
+      deadlineEnd.setHours(23, 59, 0, 0);
+      const hoursLeft = Math.max(1, Math.ceil((deadlineEnd - Date.now()) / 3600000));
+      subText = `<small class="urgent-label">⚑ ${hoursLeft}h</small>`;
+    } else {
+      subText = `<small>${fmtRelativeDays(dateStr)}</small>`;
+    }
+    dateEl.innerHTML = `${fmtDateBR(dateStr)}<br>${subText}`;
     dateEl.addEventListener("click", e => { e.stopPropagation(); openQuickDate(t.id); });
     corner.appendChild(dateEl);
   }
@@ -320,7 +340,11 @@ function renderTaskCard(t) {
   // footer (bottom-right): freq + counter
   const footer = el("div", { class: "task-footer" });
   const freqIcon = el("button", { type: "button", class: "freq-icon", "aria-label": "Frequência" });
-  freqIcon.textContent = t.type === "routine" ? "↻" : "→";
+  if (t.type === "routine") {
+    freqIcon.textContent = "↻";
+  } else {
+    freqIcon.innerHTML = `<svg viewBox="0 0 14 14" width="14" height="14" fill="none" aria-hidden="true"><line x1="2.5" y1="1" x2="2.5" y2="13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5,1.5 L9.5,1.2 C11,3 11,6 9.5,7.8 L2.5,7.5 Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>`;
+  }
   freqIcon.addEventListener("click", e => {
     e.stopPropagation();
     const msg = t.type === "routine"
@@ -357,40 +381,51 @@ function renderPending(root) {
 
   const filters = el("section", { class: "filters" });
 
+  const typeWrap = el("div", { class: "filter-group" });
+  typeWrap.appendChild(el("span", { class: "filter-label" }, "Tipo"));
   const typeSel = el("select", { "aria-label": "Tipo" });
-  [["all", "Todos os tipos"], ["oneoff", "Pontuais"], ["routine", "Se repete"]].forEach(([v, lbl]) => {
+  [["all", "Todos"], ["oneoff", "Pontuais"], ["routine", "Frequentes"]].forEach(([v, lbl]) => {
     const o = el("option", { value: v }, lbl);
     if (f.type === v) o.selected = true;
     typeSel.appendChild(o);
   });
   typeSel.addEventListener("change", () => { f.type = typeSel.value; renderPendingList(listEl); });
-  filters.appendChild(typeSel);
+  typeWrap.appendChild(typeSel);
+  filters.appendChild(typeWrap);
 
+  const impWrap = el("div", { class: "filter-group" });
+  impWrap.appendChild(el("span", { class: "filter-label" }, "Importância"));
   const impSel = el("select", { "aria-label": "Importância" });
-  [["all", "Toda importância"], ["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
+  [["all", "Todas"], ["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
     const o = el("option", { value: v }, lbl);
     if (f.imp === v) o.selected = true;
     impSel.appendChild(o);
   });
   impSel.addEventListener("change", () => { f.imp = impSel.value; renderPendingList(listEl); });
-  filters.appendChild(impSel);
+  impWrap.appendChild(impSel);
+  filters.appendChild(impWrap);
 
+  const tagWrap = el("div", { class: "filter-group" });
+  tagWrap.appendChild(el("span", { class: "filter-label" }, "Categoria"));
   const tagSel = el("select", { "aria-label": "Categoria" });
-  tagSel.appendChild(el("option", { value: "all" }, "Toda categoria"));
+  tagSel.appendChild(el("option", { value: "all" }, "Todas"));
   state.tags.forEach(tag => {
     const o = el("option", { value: tag.id }, tag.name);
     if (f.tagId === tag.id) o.selected = true;
     tagSel.appendChild(o);
   });
   tagSel.addEventListener("change", () => { f.tagId = tagSel.value; renderPendingList(listEl); });
-  filters.appendChild(tagSel);
+  tagWrap.appendChild(tagSel);
+  filters.appendChild(tagWrap);
 
-  const showDoneLbl = el("label", { class: "toggle" });
-  const showDone = el("input", { type: "checkbox" });
-  showDone.checked = f.showDone;
-  showDone.addEventListener("change", () => { f.showDone = showDone.checked; renderPendingList(listEl); });
-  showDoneLbl.append(showDone, document.createTextNode(" Mostrar concluídas"));
-  filters.appendChild(showDoneLbl);
+  const showDoneBtn = el("button", { type: "button", class: "chip-toggle" + (f.showDone ? " active" : "") });
+  showDoneBtn.textContent = "Concluídas";
+  showDoneBtn.addEventListener("click", () => {
+    f.showDone = !f.showDone;
+    showDoneBtn.classList.toggle("active", f.showDone);
+    renderPendingList(listEl);
+  });
+  filters.appendChild(showDoneBtn);
 
   root.appendChild(filters);
 
@@ -602,7 +637,7 @@ async function toggleComplete(id) {
     const cb = card.querySelector(".task-checkbox");
     if (cb) playBurst(cb);
     card.classList.add("completing");
-    await sleep(440);
+    await sleep(700);
   }
 
   if (t.type === "oneoff") {
@@ -731,6 +766,7 @@ function openTaskModal(id = null) {
   state.draftTagIds = t?.tags ? [...t.tags] : [];
   renderTagSelector();
 
+  document.getElementById("silent-notif").checked = t?.silentNotifications || false;
   document.getElementById("mic-status").textContent = "";
   document.getElementById("modal").hidden = false;
 }
@@ -821,6 +857,7 @@ function readForm() {
     title, description, type, importance,
     tags: state.draftTagIds.slice(),
     notifications: state.draftNotifications.slice(),
+    silentNotifications: document.getElementById("silent-notif").checked,
     completed: existing?.completed || false,
     completedAt: existing?.completedAt || null,
     createdAt: existing?.createdAt || new Date().toISOString(),
@@ -1238,7 +1275,7 @@ function buildScheduledNotifications() {
   const horizon = now + 7 * 86400000;
   const items = [];
   for (const t of state.tasks) {
-    if (t.completed) continue;
+    if (t.completed || t.silentNotifications) continue;
     const baseMs = dueMsFor(t);
     if (!baseMs) continue;
     for (const n of t.notifications || []) {
@@ -1275,7 +1312,7 @@ function nextOccurrenceOfTime(h, m, addDays = 0) {
 function buildDigestItem(triggerMs, kind) {
   const date = new Date(triggerMs);
   const targetISO = ymd(kind === "morning" ? date : new Date(triggerMs + 86400000));
-  const items = tasksOnDate(targetISO);
+  const items = tasksOnDate(targetISO).filter(t => !t.silentNotifications);
   if (!items.length) return null;
   const lines = items.slice(0, 6).map(t => `• ${t.title}`);
   return {
@@ -1345,6 +1382,25 @@ function showToast(msg, ms = 2200) {
 }
 
 /* ===== wiring ===== */
+
+const THEME_KEY = "fluxo/theme";
+
+function applyTheme(val) {
+  if (val === "auto") {
+    delete document.documentElement.dataset.theme;
+    localStorage.removeItem(THEME_KEY);
+  } else {
+    document.documentElement.dataset.theme = val;
+    localStorage.setItem(THEME_KEY, val);
+  }
+}
+
+function updateThemeBtns() {
+  const cur = document.documentElement.dataset.theme || "auto";
+  document.querySelectorAll(".theme-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.themeVal === cur);
+  });
+}
 
 function setupUI() {
   document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
@@ -1434,6 +1490,25 @@ function setupUI() {
     state.monthPickerYear += 1; renderMonthPicker();
   });
 
+  // Theme picker
+  document.querySelector(".brand").addEventListener("click", () => {
+    updateThemeBtns();
+    document.getElementById("theme-modal").hidden = false;
+  });
+  document.getElementById("close-theme-modal").addEventListener("click", () => {
+    document.getElementById("theme-modal").hidden = true;
+  });
+  document.getElementById("theme-modal").addEventListener("click", e => {
+    if (e.target.id === "theme-modal") document.getElementById("theme-modal").hidden = true;
+  });
+  document.querySelectorAll(".theme-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      applyTheme(btn.dataset.themeVal);
+      updateThemeBtns();
+      document.getElementById("theme-modal").hidden = true;
+    });
+  });
+
   // Per-task tag selector
   document.getElementById("close-tag-select").addEventListener("click", closeTaskTagsSelector);
   document.getElementById("tag-select-modal").addEventListener("click", e => {
@@ -1451,6 +1526,8 @@ async function registerSW() {
 }
 
 async function init() {
+  const savedTheme = localStorage.getItem(THEME_KEY);
+  if (savedTheme) document.documentElement.dataset.theme = savedTheme;
   load();
   setupUI();
   setupSpeech();

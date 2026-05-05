@@ -92,7 +92,38 @@ Combina dois papéis:
 
 ## Pendências Próximas
 
-### Bugs prováveis a verificar no celular
+### Mudanças solicitadas pelo usuário — NÃO IMPLEMENTADAS
+
+Sessão de 2026-05 listou 12 mudanças. Apenas a #1 foi feita. Continuar daqui na próxima sessão.
+
+| # | Mudança | Status | Notas técnicas |
+|---|---|---|---|
+| 1 | Reestilizar botão "Criar" no seletor de tags | ✅ FEITO | trocado `ghost-btn` → `primary-btn` em `tag-select-modal` |
+| 2 | Toggle "Sem notificações" na tarefa | ⏳ pendente | novo campo `t.silentNotifications: bool`. Excluir task de `buildScheduledNotifications` E `buildDigestItem`. Default: silencia tudo (per-task + digest) |
+| 3 | Mic embutido no input de título (estilo WhatsApp) | ⏳ pendente | Remover `voice-row` separada. Wrapper relativo no input com `<button class="mic-inline">` posicionado absolute right. Tirar texto "Falar". |
+| 4 | Fix scroll "Pra hoje" só mostra 2 tarefas | ⏳ pendente | Provavelmente `flex: 1 1 50%; max-height: 50%` está calculando errado. Trocar por `flex: 1 1 0; min-height: 0; max-height: none`. Validar ambas seções rolam. |
+| 5 | "Pra hoje" deve incluir pontuais com deadline hoje + ordem desc importância | ⏳ pendente | `renderHome` filter `tasksOnDate(today)` em vez de só rotinas. Sort por `b.importance - a.importance`. NÃO incluir overdue. |
+| 6 | Bandeira (🚩) em vez de seta (→) pra pontuais | ⏳ pendente | `freqIcon.textContent = "🚩"` |
+| 7 | Lembrete: urgente ≤2 dias acima de crítica + texto "Urgente: X horas restantes" | ⏳ pendente | Sort: rank 0 = `diffDays >=0 && <=2`. Calc horas: assumir 23:59 do dia. Substitui texto da data quando urgente. Overdue mantém "vencida há". |
+| 8 | Animação de conclusão muito rápida | ⏳ pendente | Aumentar `taskCollapse` de 0.45s → 0.7s. Aumentar `sleep(440)` → `sleep(700)`. |
+| 9 | Reestilizar toggle "Mostrar concluídas" | ⏳ pendente | Trocar checkbox HTML padrão por chip-style (igual `.imp-chip`). Manter mesmo border-radius/cores do app. |
+| 10 | Labels visíveis para os 3 filtros | ⏳ pendente | "Tipo", "Importância", "Categoria" como `<span>` acima de cada select. |
+| 11 | "Se repete" → "Frequentes" | ⏳ pendente | Em 2 lugares: radio do modal de tarefa (`index.html`) e dropdown de filtro tipo (`app.js renderPending`). |
+| 12 | Click no logo Fluxo abre menu de tema (Auto/Claro/Escuro) | ⏳ pendente | Listener em `.brand`. Pequeno modal/popover com 3 botões. Persistir em `fluxo/theme`. Aplicar via `documentElement.dataset.theme`. CSS: `:root[data-theme="dark"]` override + `:root:not([data-theme="light"]):not([data-theme="dark"])` dentro do media query auto. |
+
+### Defaults assumidos para os pendentes (caso não haja revisão)
+- (#2) Sem notificações silencia tudo (per-task + digests)
+- (#5) "Pra hoje" só `=== today`, NÃO inclui overdue
+- (#7) Texto "Urgente" só para futuro <=48h. Overdue mantém visual de vencida.
+- (#12) Tema oferece 3 opções: Auto / Claro / Escuro
+
+### Tarefas de migração ao concluir os 12 itens
+- Bump cache SW pra `fluxo-v6`
+- Atualizar Decisions Log com cada decisão tomada
+- Mover entradas desta tabela para "Status Atual" ao serem feitas
+- Considerar test no celular após cada lote (sticky, animação, mic)
+
+### Bugs prováveis a verificar no celular (do ciclo anterior)
 1. **Animação burst em iOS Safari**: `prefers-color-scheme` e `position: fixed` em particles podem ter quirks. Validar.
 2. **Modal aninhado**: ao clicar tag dentro do `tags-modal` (gerenciar) → abre `tag-edit-modal` por cima. z-index OK? Validar.
 3. **Sticky header em `.section--home`**: testar scroll dentro da box, header deve permanecer visível.
@@ -101,6 +132,14 @@ Combina dois papéis:
 
 ### Funcionalidades pedidas mas ainda não confirmadas / implementadas
 - Nenhuma pendente do último ciclo. Aguardando feedback do usuário.
+
+### Pergunta aberta do usuário (não-codificação)
+- "Podemos integrar com Google Calendar?" — usuário pediu como curiosidade. Resposta a dar:
+  - **Sim, viável**, mas exige Google Cloud project + OAuth2 + chave API (sem custo até quotas modestas)
+  - 2 modos: **export one-way** (Fluxo → Google Calendar via API insert) ou **sync bidirecional** (mais complexo, requer webhook ou polling)
+  - Sem backend, OAuth tem que ser via Google Identity Services no client (token de curta duração no localStorage)
+  - Trade-off: introduz dependência externa, dados saem do device, exige configuração inicial do usuário
+  - Sugestão: começar com export one-way (botão "Enviar pra Google Calendar" por tarefa)
 
 ### Melhorias técnicas sugeridas (não pedidas)
 - **Long-press na tag** abre menu remover-da-tarefa vs edit (UX melhor que sempre abrir tag-edit global)
@@ -180,6 +219,10 @@ Registre decisões técnicas e escolhas de produto que NÃO devem ser revisitada
 - Botão `Não renovar` renomeado para `Excluir rotina` com estilo danger.
 - Estrutura `.claude-ops/04_skills/` (refactor, pwa_audit, feature_add) para carregamento sob demanda.
 - Decision Log e Erros Conhecidos movidos pra `CLAUDE_STATE.md` (single source of truth).
+- "Sem notificações" (toggle por tarefa): silencia per-task **E** digests para essa task.
+- Pra hoje = só `=== today`. Overdue não aparece na home (vai pra Pendentes).
+- Texto "Urgente: X horas restantes" para deadline ≤48h no futuro. Overdue continua "vencida há".
+- Tema: 3 estados (Auto/Claro/Escuro). Override via `:root[data-theme]`.
 
 ### Reservado pra próximas decisões
 <!-- Adicionar entradas datadas aqui ao tomar decisões -->

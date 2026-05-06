@@ -105,6 +105,51 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* ===== Global checkbox & radio ===== */
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-strong);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: border-color 0.15s, background 0.15s;
+}
+input[type="checkbox"] { border-radius: 6px; }
+input[type="radio"]    { border-radius: 50%; }
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+input[type="checkbox"]:checked::after {
+  content: "✓";
+  color: #fff;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+}
+input[type="radio"]:checked::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -133,11 +178,20 @@ body {
   margin: 0;
   font-weight: 700;
   letter-spacing: 0.4px;
-  background: linear-gradient(120deg, #8ec9c1 0%, #a3d2b8 35%, #d2bf9a 70%, #e0a8a0 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
+  color: var(--accent);
+}
+
+.version-badge {
+  font-size: 0.7rem;
+  color: var(--text-soft);
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  margin-left: auto;
+  margin-right: 8px;
 }
 
 .install-btn {
@@ -313,34 +367,11 @@ body {
 .task[data-imp="4"] { border-color: var(--imp-crit); background: var(--imp-crit-tint); }
 
 .task-checkbox {
-  appearance: none;
   width: 22px;
   height: 22px;
-  border: 2px solid var(--border-strong);
-  border-radius: 6px;
-  background: var(--surface);
-  cursor: pointer;
-  flex-shrink: 0;
-  position: relative;
   margin-top: 2px;
   grid-column: 1;
   grid-row: 1;
-}
-
-.task-checkbox:checked {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.task-checkbox:checked::after {
-  content: "✓";
-  color: #fff;
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 14px;
 }
 
 .task-content {
@@ -511,6 +542,9 @@ body {
   animation: fade 0.2s ease-out;
 }
 .modal[hidden] { display: none; }
+
+/* cat-modal opens on top of add-item-modal and cat-picker-modal */
+#cat-modal { z-index: 200; }
 
 @keyframes fade {
   from { opacity: 0; }
@@ -834,41 +868,78 @@ body {
 
 .filters {
   display: flex;
-  gap: 8px;
+  flex-direction: row;
   flex-wrap: wrap;
+  gap: 6px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 12px;
+  padding: 10px 12px;
   box-shadow: var(--shadow);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  align-items: flex-start;
 }
 
-.filter-group {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-}
-
-.filter-label {
-  font-size: 0.8rem;
-  color: var(--text-soft);
-  font-weight: 500;
+.filter-dropdown {
+  position: relative;
   flex-shrink: 0;
+}
+
+.filter-dropdown-hdr {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  padding: 7px 12px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.filter-dropdown-hdr.open,
+.filter-dropdown-hdr:hover {
+  background: var(--surface-3);
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.filter-caret { font-size: 0.65rem; }
+
+.filter-dropdown-body {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  box-shadow: var(--shadow-strong);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 50;
+  min-width: 140px;
 }
 
 .filter-chip {
   background: var(--surface-2);
   border: 1px solid var(--border);
   color: var(--text-dim);
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-size: 0.84rem;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 0.88rem;
   font-family: inherit;
   cursor: pointer;
+  text-align: left;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
+  width: 100%;
 }
 .filter-chip:hover { background: var(--surface-3); color: var(--text); }
 .filter-chip.active {
@@ -877,7 +948,6 @@ body {
   color: var(--text);
   font-weight: 600;
 }
-
 .filter-chip--tag.active {
   background: var(--chip-color, var(--accent));
   border-color: var(--chip-color, var(--accent));
@@ -886,11 +956,12 @@ body {
 .filter-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 0.88rem;
   color: var(--text-dim);
-  width: 100%;
-  margin-top: 2px;
+  cursor: pointer;
+  padding: 4px 2px;
+  align-self: center;
 }
 
 /* ===== Calendar ===== */
@@ -1096,18 +1167,33 @@ body {
 }
 .shopping-item:last-of-type { border-bottom: none; }
 
-.shopping-item input[type="checkbox"] {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-
 .shopping-item-name {
   flex: 1;
   font-size: 0.96rem;
 }
+
+.shopping-item-input {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 0.96rem;
+  font-family: inherit;
+  outline: none;
+}
+
+.shopping-item-edit {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.shopping-item-edit:hover { opacity: 1; }
 
 .shopping-item.checked .shopping-item-name {
   text-decoration: line-through;

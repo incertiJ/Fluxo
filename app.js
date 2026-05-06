@@ -2,6 +2,7 @@
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
+const APP_VERSION = "2.4";
 
 const TAG_COLORS = [
   "#a3d5d2", "#b8d9c4", "#c8d8b0", "#dee2a8",
@@ -48,6 +49,8 @@ const state = {
   editingCategoryDraft: null,
   addItemDraft: { name: "", categoryId: null },
   catPickerContext: null,
+  filterOpen: { type: false, imp: false, tag: false },
+  _lastView: null,
 };
 
 /* ===== persistence ===== */
@@ -210,19 +213,29 @@ function el(tag, attrs = {}, ...children) {
 
 function setView(v) {
   state.view = v;
-  if (v === "calendar") state.calSelectedDate = null;
+  if (v === "calendar") state.calSelectedDate = todayISO();
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.view === v));
   render();
 }
 
 function render() {
   const view = document.getElementById("view");
+  const fab = document.getElementById("add-btn");
+
+  // Only play entry animation when the tab changes
+  const viewChanged = state.view !== state._lastView;
+  state._lastView = state.view;
+
   view.innerHTML = "";
   view.classList.remove("view--home", "view--scrollable");
-  // re-trigger animation
-  void view.offsetWidth;
-  view.style.animation = "none";
-  requestAnimationFrame(() => { view.style.animation = ""; });
+
+  if (viewChanged) {
+    void view.offsetWidth;
+    view.style.animation = "none";
+    requestAnimationFrame(() => { view.style.animation = ""; });
+  }
+
+  fab.hidden = state.view === "shopping";
 
   if (state.view === "home") { view.classList.add("view--home"); renderHome(view); }
   else if (state.view === "pending") { view.classList.add("view--scrollable"); renderPending(view); }
@@ -377,52 +390,107 @@ function renderTaskCard(t) {
 
 function renderPending(root) {
   const f = state.filters;
+  const fo = state.filterOpen;
 
   const filters = el("section", { class: "filters" });
 
-  const makeChipRow = (label, pairs, activeSet) => {
-    const row = el("div", { class: "filter-group" });
-    row.appendChild(el("span", { class: "filter-label" }, label));
-    pairs.forEach(([v, lbl]) => {
-      const chip = el("button", { type: "button", class: "filter-chip" + (activeSet.has(v) ? " active" : "") }, lbl);
-      chip.dataset.val = v;
-      chip.addEventListener("click", () => {
-        if (activeSet.has(v)) activeSet.delete(v); else activeSet.add(v);
-        chip.classList.toggle("active", activeSet.has(v));
-        renderPendingList(listEl);
-      });
-      row.appendChild(chip);
+  const makeDropdown = (key, label, buildChips) => {
+    const wrap = el("div", { class: "filter-dropdown" });
+    const hdr = el("button", {
+      type: "button",
+      class: "filter-dropdown-hdr" + (fo[key] ? " open" : "")
     });
-    return row;
+    hdr.innerHTML = `${label} <span class="filter-caret">${fo[key] ? "▲" : "▼"}</span>`;
+    hdr.addEventListener("click", () => {
+      fo[key] = !fo[key];
+      renderPendingList(listEl);
+      // re-render only the filter section
+      const newFilters = buildFiltersEl();
+      root.replaceChild(newFilters, filters.parentNode ? filters : root.firstChild);
+    });
+    wrap.appendChild(hdr);
+    if (fo[key]) {
+      const body = el("div", { class: "filter-dropdown-body" });
+      buildChips(body);
+      wrap.appendChild(body);
+    }
+    return wrap;
   };
 
-  filters.appendChild(makeChipRow("Tipo:", [["oneoff", "Pontual"], ["routine", "Se repete"]], f.types));
-  filters.appendChild(makeChipRow("Importância:", [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]], f.imps));
+  // This inner function builds the full filters el so hdr click can swap it
+  const buildFiltersEl = () => {
+    const sec = el("section", { class: "filters" });
 
-  if (state.tags.length) {
-    const tagRow = el("div", { class: "filter-group" });
-    tagRow.appendChild(el("span", { class: "filter-label" }, "Tag:"));
-    state.tags.forEach(tag => {
-      const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (f.tagIds.has(tag.id) ? " active" : "") }, tag.name);
-      chip.style.setProperty("--chip-color", tag.color);
-      chip.addEventListener("click", () => {
-        if (f.tagIds.has(tag.id)) f.tagIds.delete(tag.id); else f.tagIds.add(tag.id);
-        chip.classList.toggle("active", f.tagIds.has(tag.id));
-        renderPendingList(listEl);
+    const makeDropdownInner = (key, label, buildChips) => {
+      const wrap = el("div", { class: "filter-dropdown" });
+      const hdr = el("button", {
+        type: "button",
+        class: "filter-dropdown-hdr" + (fo[key] ? " open" : "")
       });
-      tagRow.appendChild(chip);
-    });
-    filters.appendChild(tagRow);
-  }
+      hdr.innerHTML = `${label} <span class="filter-caret">${fo[key] ? "▲" : "▼"}</span>`;
+      hdr.addEventListener("click", () => {
+        fo[key] = !fo[key];
+        const rebuilt = buildFiltersEl();
+        sec.replaceWith(rebuilt);
+      });
+      wrap.appendChild(hdr);
+      if (fo[key]) {
+        const body = el("div", { class: "filter-dropdown-body" });
+        buildChips(body);
+        wrap.appendChild(body);
+      }
+      return wrap;
+    };
 
-  const showDoneLbl = el("label", { class: "toggle filter-toggle" });
-  const showDone = el("input", { type: "checkbox" });
-  showDone.checked = f.showDone;
-  showDone.addEventListener("change", () => { f.showDone = showDone.checked; renderPendingList(listEl); });
-  showDoneLbl.append(showDone, document.createTextNode(" Mostrar concluídas"));
-  filters.appendChild(showDoneLbl);
+    sec.appendChild(makeDropdownInner("type", "Tipo", body => {
+      [["oneoff", "Pontual"], ["routine", "Se repete"]].forEach(([v, lbl]) => {
+        const chip = el("button", { type: "button", class: "filter-chip" + (f.types.has(v) ? " active" : "") }, lbl);
+        chip.addEventListener("click", () => {
+          if (f.types.has(v)) f.types.delete(v); else f.types.add(v);
+          chip.classList.toggle("active", f.types.has(v));
+          renderPendingList(listEl);
+        });
+        body.appendChild(chip);
+      });
+    }));
 
-  root.appendChild(filters);
+    sec.appendChild(makeDropdownInner("imp", "Importância", body => {
+      [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
+        const chip = el("button", { type: "button", class: "filter-chip" + (f.imps.has(v) ? " active" : "") }, lbl);
+        chip.addEventListener("click", () => {
+          if (f.imps.has(v)) f.imps.delete(v); else f.imps.add(v);
+          chip.classList.toggle("active", f.imps.has(v));
+          renderPendingList(listEl);
+        });
+        body.appendChild(chip);
+      });
+    }));
+
+    sec.appendChild(makeDropdownInner("tag", "Categoria", body => {
+      state.tags.forEach(tag => {
+        const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (f.tagIds.has(tag.id) ? " active" : "") }, tag.name);
+        chip.style.setProperty("--chip-color", tag.color);
+        chip.addEventListener("click", () => {
+          if (f.tagIds.has(tag.id)) f.tagIds.delete(tag.id); else f.tagIds.add(tag.id);
+          chip.classList.toggle("active", f.tagIds.has(tag.id));
+          renderPendingList(listEl);
+        });
+        body.appendChild(chip);
+      });
+    }));
+
+    const showDoneLbl = el("label", { class: "filter-toggle" });
+    const showDone = el("input", { type: "checkbox" });
+    showDone.checked = f.showDone;
+    showDone.addEventListener("change", () => { f.showDone = showDone.checked; renderPendingList(listEl); });
+    showDoneLbl.append(showDone, document.createTextNode(" Mostrar concluídas"));
+    sec.appendChild(showDoneLbl);
+
+    return sec;
+  };
+
+  const filtersEl = buildFiltersEl();
+  root.appendChild(filtersEl);
 
   const listEl = el("div", { class: "task-list" });
   listEl.style.padding = "0";
@@ -526,9 +594,9 @@ function renderCalendar(root) {
   }
   root.appendChild(grid);
 
-  // Inline day panel (replaces blocking modal)
+  // Inline day panel
   if (state.calSelectedDate) {
-    const items = tasksOnDate(state.calSelectedDate);
+    const items = tasksOnDate(state.calSelectedDate).sort((a, b) => b.importance - a.importance);
     const panel = el("section", { class: "section" });
     const panelHdr = el("div", { class: "section-hdr" });
     const dateLabel = parseYMD(state.calSelectedDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
@@ -642,7 +710,7 @@ function renderShoppingCategory(cat) {
     const body = el("div", { class: "shopping-cat-body" });
     cat.items.forEach((item, i) => {
       const row = el("div", { class: "shopping-item" + (item.checked ? " checked" : "") });
-      const cb = el("input", { type: "checkbox" });
+      const cb = el("input", { type: "checkbox", class: "styled-check" });
       cb.checked = item.checked;
       cb.addEventListener("change", e => {
         e.stopPropagation();
@@ -650,7 +718,30 @@ function renderShoppingCategory(cat) {
         save();
         render();
       });
-      const lbl = el("span", { class: "shopping-item-name" }, item.name);
+
+      const nameEl = el("span", { class: "shopping-item-name" }, item.name);
+
+      const editBtn = el("button", { type: "button", class: "shopping-item-edit", "aria-label": "Editar" }, "✏️");
+      editBtn.addEventListener("click", e => {
+        e.stopPropagation();
+        // Replace span with inline input
+        const input = el("input", { type: "text", class: "shopping-item-input", value: item.name, maxlength: "200" });
+        const confirm = () => {
+          const v = input.value.trim();
+          if (v) { cat.items[i].name = v; save(); }
+          render();
+        };
+        input.addEventListener("blur", confirm);
+        input.addEventListener("keydown", ev => {
+          if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
+          if (ev.key === "Escape") { render(); }
+        });
+        nameEl.replaceWith(input);
+        editBtn.remove();
+        input.focus();
+        input.select();
+      });
+
       const rm = el("button", { type: "button", class: "remove-btn" }, "×");
       rm.addEventListener("click", e => {
         e.stopPropagation();
@@ -658,7 +749,7 @@ function renderShoppingCategory(cat) {
         save();
         render();
       });
-      row.append(cb, lbl, rm);
+      row.append(cb, nameEl, editBtn, rm);
       body.appendChild(row);
     });
 
@@ -1529,7 +1620,8 @@ function buildScheduledNotifications() {
 function nextOccurrenceOfTime(h, m, addDays = 0) {
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  if (d.getTime() < Date.now() && addDays === 0) d.setDate(d.getDate() + 1);
+  // Do NOT advance past times for addDays=0: checkDueNotifications needs today's
+  // past digest times to fire when the user opens the app after 9h/22h.
   d.setDate(d.getDate() + addDays);
   return d.getTime();
 }
@@ -1569,9 +1661,15 @@ function checkDueNotifications() {
   }
   for (const id of [...notified]) {
     if (!allIds.has(id)) {
-      const parts = id.split("|");
-      const baseMs = Number(parts[2] || 0);
-      if (baseMs && baseMs < now - 2 * 86400000) notified.delete(id);
+      if (id.startsWith("d|")) {
+        // digest ID: d|kind|YYYY-MM-DD — clean up if older than 2 days
+        const dateStr = id.split("|")[2];
+        if (dateStr && diffDays(todayISO(), dateStr) > 2) notified.delete(id);
+      } else {
+        const parts = id.split("|");
+        const baseMs = Number(parts[2] || 0);
+        if (baseMs && baseMs < now - 2 * 86400000) notified.delete(id);
+      }
     }
   }
   saveNotified(notified);
@@ -1609,6 +1707,9 @@ function showToast(msg, ms = 2200) {
 /* ===== wiring ===== */
 
 function setupUI() {
+  const vb = document.getElementById("version-badge");
+  if (vb) vb.textContent = "v" + APP_VERSION;
+
   document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
 
   document.getElementById("add-btn").addEventListener("click", () => openTaskModal());

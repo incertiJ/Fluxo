@@ -63,6 +63,7 @@ Quando alterar código existente: forneça apenas o trecho mudado, com contexto 
 - Não crie PR sem o usuário pedir explicitamente.
 - **Nomenclatura de branches**: novas branches seguem o modelo `claude/fluxo-vX.X-<slug>` onde X.X é a versão do produto (ex: `claude/fluxo-v2-shopping-categories`). Slug em kebab-case descrevendo o escopo da mudança.
 - **Nome de branch curto (display)**: ao mencionar a branch para o usuário, usar o formato legível `Fluxo-VXX` (ex: `Fluxo-V20` para v2.0, `Fluxo-V21` para v2.1).
+- **⚠️ BRANCH FIXA DO PROJETO**: NUNCA mude a branch de trabalho sem permissão explícita do usuário. Não crie nova branch, não troque para outra branch, não faça push em branch diferente da atual sem ser explicitamente instruído. A branch de trabalho é definida pelo usuário e deve ser respeitada durante toda a sessão.
 
 ### 10. Verificação após mudanças
 Sempre que mexer em JS/HTML/CSS:
@@ -102,3 +103,4 @@ Ao final de uma sequência relevante de mudanças (antes de o usuário fechar a 
 - Abstrair antes de ter 3 usos
 - "Defensive programming" excessivo dentro de código interno controlado
 - Notificações para tudo (já temos digest 9h/22h, não duplicar)
+- **Estilo de checkbox/radio inconsistente**: TODOS os `<input type="checkbox">` e `<input type="radio">` do app devem seguir o estilo global definido em styles.css (fundo transparente, contorno `--border-strong`, bordas arredondadas, check/dot em `--accent`). Nunca use `accent-color`, `appearance: auto`, ou estilos específicos por componente. Nunca adicione um override de checkbox/radio sem garantir que segue o padrão global.

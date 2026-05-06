@@ -1,10 +1,12 @@
-const CACHE = "fluxo-v5";
+const CACHE = "fluxo-v6";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js",
   "./manifest.json", "./icon.svg"
 ];
 
 const timers = new Map();
+// Persisted schedule so we can re-arm timers if SW is restarted
+let scheduledItems = [];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -38,7 +40,10 @@ self.addEventListener("fetch", e => {
 self.addEventListener("message", e => {
   const data = e.data;
   if (!data) return;
-  if (data.type === "schedule") rescheduleAll(data.items || []);
+  if (data.type === "schedule") {
+    scheduledItems = data.items || [];
+    rescheduleAll(scheduledItems);
+  }
 });
 
 function rescheduleAll(items) {
@@ -47,7 +52,8 @@ function rescheduleAll(items) {
   const now = Date.now();
   for (const item of items) {
     const delay = item.triggerMs - now;
-    if (delay <= 0 || delay > 24 * 3600000) continue;
+    // Only schedule notifications within the next 25 hours
+    if (delay <= 0 || delay > 25 * 3600000) continue;
     const handle = setTimeout(() => {
       self.registration.showNotification(item.title, {
         body: item.body,
@@ -60,6 +66,11 @@ function rescheduleAll(items) {
     timers.set(item.id, handle);
   }
 }
+
+// Re-arm timers whenever SW wakes due to a fetch (keeps notifications alive)
+self.addEventListener("fetch", () => {
+  if (scheduledItems.length && timers.size === 0) rescheduleAll(scheduledItems);
+}, { passive: true });
 
 self.addEventListener("notificationclick", e => {
   e.notification.close();

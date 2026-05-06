@@ -57,6 +57,15 @@ Quando alterar código existente: forneça apenas o trecho mudado, com contexto 
 - Após mudanças significativas, lembre o usuário de atualizar `CLAUDE_STATE.md` antes do próximo reset.
 
 ### 9. Versão do produto
+<git_protocol>
+- Branching: Sempre crie branches incrementais baseadas na versão atual do projeto.
+- Nomenclatura Estrita: claude/fluxo-v<VERSÃO> (ex: claude/fluxo-v3.01, claude/fluxo-v3.02).
+- Proibição: NUNCA use slugs descritivos no nome da branch. A ordenação deve ser puramente numérica/alfabética.
+- Display Name: Use "Fluxo-V" + versão sem pontos (ex: Fluxo-V301) ao mencionar branches no chat.
+- Commits: tipo(escopo): mensagem curta e técnica.
+- Deploy: Merge para claude/fluxo-v2 após estabilidade confirmada.
+</git_protocol>
+  
 - A versão atual do produto está em `CLAUDE_STATE.md` e em `APP_VERSION` no `app.js`.
 - **Mudanças pequenas** (bug fix, ajuste visual, texto): adiciona `+0.01` (ex: 3.00 → 3.01).
 - **Mudanças grandes** (nova funcionalidade, refactor significativo, mudança estrutural): adiciona `+1.00` com reset da parte decimal (ex: 3.01 → 4.00, NÃO 4.01).

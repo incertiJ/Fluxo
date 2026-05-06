@@ -40,6 +40,7 @@ self.addEventListener("fetch", e => {
 self.addEventListener("message", e => {
   const data = e.data;
   if (!data) return;
+  if (data.type === "SKIP_WAITING") { self.skipWaiting(); return; }
   if (data.type === "schedule") {
     scheduledItems = data.items || [];
     rescheduleAll(scheduledItems);

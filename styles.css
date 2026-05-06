@@ -195,6 +195,7 @@ input[type="radio"]:checked::after {
 }
 
 .version-badge {
+  position: relative;
   font-size: 0.7rem;
   color: var(--text-soft);
   background: var(--surface-3);
@@ -204,18 +205,44 @@ input[type="radio"]:checked::after {
   font-weight: 500;
   letter-spacing: 0.3px;
   margin-left: auto;
-  margin-right: 8px;
-}
-
-.install-btn {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 999px;
-  font-size: 0.85rem;
   cursor: pointer;
+  font-family: inherit;
 }
+.version-badge:hover { border-color: var(--accent); color: var(--text); }
+
+.version-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  box-shadow: var(--shadow-strong);
+  z-index: 50;
+  min-width: 230px;
+  font-size: 0.85rem;
+  color: var(--text);
+  text-align: left;
+  white-space: normal;
+  cursor: default;
+}
+.version-popover strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.version-popover ul {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.version-popover li { line-height: 1.4; }
 
 .tabs {
   display: flex;
@@ -832,32 +859,42 @@ input[type="radio"]:checked::after {
 }
 .ghost-btn.small { padding: 8px 12px; font-size: 0.9rem; align-self: flex-start; }
 
-.voice-row {
+.title-input-wrap {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+}
+.title-input-wrap input {
+  flex: 1;
+  padding-right: 42px !important;
 }
 
-.mic-btn {
-  display: inline-flex;
+.mic-inline {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  background: var(--accent-3);
-  border: 1px solid var(--accent-2);
-  color: var(--text);
-  padding: 10px 14px;
-  border-radius: 999px;
+  justify-content: center;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  padding: 0;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
 }
-.mic-btn.recording {
-  background: var(--imp-crit-soft);
+.mic-inline:hover { border-color: var(--accent); color: var(--accent); }
+.mic-inline.recording {
   border-color: var(--imp-crit);
   color: var(--imp-crit-text);
   animation: pulse 1.2s infinite;
 }
-.mic-btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.mic-inline[disabled] { opacity: 0.4; cursor: not-allowed; }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -953,6 +990,7 @@ input[type="radio"]:checked::after {
   z-index: 50;
   min-width: 140px;
 }
+.filter-dropdown-body[hidden] { display: none; }
 
 .filter-chip {
   background: var(--surface-2);

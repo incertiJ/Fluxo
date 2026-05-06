@@ -2,7 +2,18 @@
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
-const APP_VERSION = "3.00";
+const APP_VERSION = "3.01";
+
+const CHANGELOG = {
+  "3.01": [
+    "Atualização automática no mobile ao detectar nova versão",
+    "Microfone inline no campo de título (só ícone, sem fundo)",
+    "Filtros de pendências fechados por padrão ao carregar",
+    "Input de nova tag com bordas e cores do app",
+    "Ícone de rotinas alterado para 🚩",
+    "Botão de instalação removido do cabeçalho",
+  ],
+};
 
 const TAG_COLORS = [
   "#a3d5d2", "#b8d9c4", "#c8d8b0", "#dee2a8",
@@ -369,7 +380,7 @@ function renderTaskCard(t) {
   // footer (bottom-right): freq + counter
   const footer = el("div", { class: "task-footer" });
   const freqIcon = el("button", { type: "button", class: "freq-icon", "aria-label": "Frequência" });
-  freqIcon.textContent = t.type === "routine" ? "↻" : "→";
+  freqIcon.textContent = t.type === "routine" ? "🚩" : "→";
   freqIcon.addEventListener("click", e => {
     e.stopPropagation();
     const msg = t.type === "routine"
@@ -1511,9 +1522,10 @@ function setupSpeech() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const micBtn = document.getElementById("mic-btn");
   const status = document.getElementById("mic-status");
+  const setStatus = t => { if (status) status.textContent = t; };
   if (!SR) {
     micBtn.disabled = true;
-    status.textContent = "Voz indisponível neste navegador";
+    setStatus("Voz indisponível neste navegador");
     return;
   }
   const rec = new SR();
@@ -1521,7 +1533,7 @@ function setupSpeech() {
   rec.interimResults = true;
   rec.continuous = false;
   let finalText = "";
-  rec.onstart = () => { micBtn.classList.add("recording"); status.textContent = "Ouvindo..."; finalText = ""; };
+  rec.onstart = () => { micBtn.classList.add("recording"); setStatus("Ouvindo..."); finalText = ""; };
   rec.onresult = e => {
     let interim = "";
     for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -1529,20 +1541,20 @@ function setupSpeech() {
       if (r.isFinal) finalText += r[0].transcript;
       else interim += r[0].transcript;
     }
-    status.textContent = (finalText + " " + interim).trim() || "Ouvindo...";
+    setStatus((finalText + " " + interim).trim() || "Ouvindo...");
   };
   rec.onerror = e => {
     micBtn.classList.remove("recording");
-    status.textContent = e.error === "not-allowed" ? "Permissão de microfone negada" : `Erro: ${e.error}`;
+    setStatus(e.error === "not-allowed" ? "Permissão de microfone negada" : `Erro: ${e.error}`);
   };
   rec.onend = () => {
     micBtn.classList.remove("recording");
     if (finalText.trim()) {
       const p = parseSpeech(finalText.trim());
       applyParsed(p);
-      status.textContent = "Sugestão pronta. Confira e ajuste.";
-    } else if (!status.textContent.startsWith("Erro") && !status.textContent.startsWith("Permissão")) {
-      status.textContent = "Nada capturado.";
+      setStatus("Sugestão pronta. Confira e ajuste.");
+    } else if (status && !status.textContent.startsWith("Erro") && !status.textContent.startsWith("Permissão")) {
+      setStatus("Nada capturado.");
     }
   };
   micBtn.addEventListener("click", () => {
@@ -1673,25 +1685,6 @@ function checkDueNotifications() {
   saveNotified(notified);
 }
 
-/* ===== install ===== */
-
-function setupInstall() {
-  const btn = document.getElementById("install-btn");
-  window.addEventListener("beforeinstallprompt", e => {
-    e.preventDefault();
-    state.installPrompt = e;
-    btn.hidden = false;
-  });
-  btn.addEventListener("click", async () => {
-    if (!state.installPrompt) return;
-    state.installPrompt.prompt();
-    await state.installPrompt.userChoice;
-    state.installPrompt = null;
-    btn.hidden = true;
-  });
-  window.addEventListener("appinstalled", () => { btn.hidden = true; });
-}
-
 /* ===== Settings modal ===== */
 
 function openSettingsModal() {
@@ -1797,7 +1790,27 @@ function showToast(msg, ms = 2200) {
 
 function setupUI() {
   const vb = document.getElementById("version-badge");
-  if (vb) vb.textContent = "v" + APP_VERSION;
+  if (vb) {
+    vb.textContent = "v" + APP_VERSION;
+    vb.addEventListener("click", () => {
+      const existing = document.getElementById("version-popover");
+      if (existing) { existing.remove(); return; }
+      const pop = document.createElement("div");
+      pop.id = "version-popover";
+      pop.className = "version-popover";
+      const changes = CHANGELOG[APP_VERSION] || [];
+      const list = changes.map(c => `<li>${c}</li>`).join("");
+      pop.innerHTML = `<strong>Novidades em v${APP_VERSION}</strong><ul>${list}</ul>`;
+      vb.appendChild(pop);
+      const closePopover = e => {
+        if (!vb.contains(e.target)) {
+          document.getElementById("version-popover")?.remove();
+          document.removeEventListener("click", closePopover);
+        }
+      };
+      setTimeout(() => document.addEventListener("click", closePopover), 10);
+    });
+  }
 
   // Settings modal (logo click)
   document.querySelector(".brand").addEventListener("click", openSettingsModal);
@@ -1928,7 +1941,21 @@ function setupUI() {
 
 async function registerSW() {
   if (!("serviceWorker" in navigator)) return;
-  try { await navigator.serviceWorker.register("./sw.js"); } catch {}
+  try {
+    const reg = await navigator.serviceWorker.register("./sw.js");
+    reg.addEventListener("updatefound", () => {
+      const sw = reg.installing;
+      if (!sw) return;
+      sw.addEventListener("statechange", () => {
+        if (sw.state === "installed" && navigator.serviceWorker.controller) {
+          sw.postMessage({ type: "SKIP_WAITING" });
+        }
+      });
+    });
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      window.location.reload();
+    });
+  } catch {}
 }
 
 async function init() {
@@ -1936,7 +1963,6 @@ async function init() {
   applyTheme();
   setupUI();
   setupSpeech();
-  setupInstall();
   render();
   await registerSW();
   checkDueNotifications();

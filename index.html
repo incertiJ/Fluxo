@@ -16,8 +16,7 @@
       <img src="./icon.svg" alt="" class="brand-icon" aria-hidden="true">
       <h1>Fluxo</h1>
     </div>
-    <span id="version-badge" class="version-badge"></span>
-    <button id="install-btn" class="install-btn" hidden>Instalar</button>
+    <button id="version-badge" class="version-badge" type="button" aria-label="Novidades desta versão"></button>
   </header>
 
   <nav class="tabs" role="tablist">
@@ -40,18 +39,14 @@
       </header>
 
       <form id="task-form" class="task-form">
-        <div class="voice-row">
-          <button type="button" id="mic-btn" class="mic-btn" aria-label="Gravar áudio">
-            <span class="mic-icon">🎤</span>
-            <span class="mic-label">Falar</span>
-          </button>
-          <span id="mic-status" class="mic-status"></span>
-        </div>
-
         <label class="field">
           <span>Título</span>
-          <input type="text" id="title" required maxlength="200" placeholder="Ex: Regar plantas">
+          <div class="title-input-wrap">
+            <input type="text" id="title" required maxlength="200" placeholder="Ex: Regar plantas">
+            <button type="button" id="mic-btn" class="mic-inline" aria-label="Gravar áudio">🎤</button>
+          </div>
         </label>
+        <span id="mic-status" class="mic-status"></span>
 
         <label class="field">
           <span>Descrição (opcional)</span>
@@ -155,9 +150,11 @@
       </header>
       <div class="task-form">
         <ul id="tags-manage-list" class="tags-manage-list"></ul>
-        <div class="row">
-          <input type="text" id="new-tag-name" placeholder="Nova tag" maxlength="40">
-          <button type="button" id="add-tag-btn" class="primary-btn">Criar</button>
+        <div class="field">
+          <div class="row">
+            <input type="text" id="new-tag-name" placeholder="Nova tag" maxlength="40">
+            <button type="button" id="add-tag-btn" class="primary-btn">Criar</button>
+          </div>
         </div>
         <p class="hint">Você pode ter até 16 tags. Toque em uma para renomear ou trocar a cor.</p>
       </div>
@@ -218,9 +215,11 @@
       </header>
       <div class="task-form">
         <div id="tag-select-list" class="task-tags"></div>
-        <div class="row">
-          <input type="text" id="new-task-tag" placeholder="Criar nova tag" maxlength="40">
-          <button type="button" id="create-task-tag-btn" class="primary-btn">Criar</button>
+        <div class="field">
+          <div class="row">
+            <input type="text" id="new-task-tag" placeholder="Criar nova tag" maxlength="40">
+            <button type="button" id="create-task-tag-btn" class="primary-btn">Criar</button>
+          </div>
         </div>
       </div>
     </div>

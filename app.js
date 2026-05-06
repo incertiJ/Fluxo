@@ -33,7 +33,7 @@ const state = {
   draftTagIds: [],
   recognition: null,
   installPrompt: null,
-  filters: { type: "all", imp: "all", tagId: "all", showDone: false },
+  filters: { types: new Set(), imps: new Set(), tagIds: new Set(), showDone: false },
   calMonth: null,
   calSelectedDate: null,
   monthPickerYear: null,
@@ -46,12 +46,21 @@ const state = {
   homeCollapsed: { reminder: false, today: false },
   editingCategoryId: null,
   editingCategoryDraft: null,
+  addItemDraft: { name: "", categoryId: null },
+  catPickerContext: null,
 };
 
 /* ===== persistence ===== */
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
 
 function load() {
   try {
@@ -201,6 +210,7 @@ function el(tag, attrs = {}, ...children) {
 
 function setView(v) {
   state.view = v;
+  if (v === "calendar") state.calSelectedDate = null;
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.view === v));
   render();
 }
@@ -370,35 +380,42 @@ function renderPending(root) {
 
   const filters = el("section", { class: "filters" });
 
-  const typeSel = el("select", { "aria-label": "Tipo" });
-  [["all", "Todos os tipos"], ["oneoff", "Pontuais"], ["routine", "Se repete"]].forEach(([v, lbl]) => {
-    const o = el("option", { value: v }, lbl);
-    if (f.type === v) o.selected = true;
-    typeSel.appendChild(o);
-  });
-  typeSel.addEventListener("change", () => { f.type = typeSel.value; renderPendingList(listEl); });
-  filters.appendChild(typeSel);
+  const makeChipRow = (label, pairs, activeSet) => {
+    const row = el("div", { class: "filter-group" });
+    row.appendChild(el("span", { class: "filter-label" }, label));
+    pairs.forEach(([v, lbl]) => {
+      const chip = el("button", { type: "button", class: "filter-chip" + (activeSet.has(v) ? " active" : "") }, lbl);
+      chip.dataset.val = v;
+      chip.addEventListener("click", () => {
+        if (activeSet.has(v)) activeSet.delete(v); else activeSet.add(v);
+        chip.classList.toggle("active", activeSet.has(v));
+        renderPendingList(listEl);
+      });
+      row.appendChild(chip);
+    });
+    return row;
+  };
 
-  const impSel = el("select", { "aria-label": "Importância" });
-  [["all", "Toda importância"], ["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
-    const o = el("option", { value: v }, lbl);
-    if (f.imp === v) o.selected = true;
-    impSel.appendChild(o);
-  });
-  impSel.addEventListener("change", () => { f.imp = impSel.value; renderPendingList(listEl); });
-  filters.appendChild(impSel);
+  filters.appendChild(makeChipRow("Tipo:", [["oneoff", "Pontual"], ["routine", "Se repete"]], f.types));
+  filters.appendChild(makeChipRow("Importância:", [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]], f.imps));
 
-  const tagSel = el("select", { "aria-label": "Categoria" });
-  tagSel.appendChild(el("option", { value: "all" }, "Toda categoria"));
-  state.tags.forEach(tag => {
-    const o = el("option", { value: tag.id }, tag.name);
-    if (f.tagId === tag.id) o.selected = true;
-    tagSel.appendChild(o);
-  });
-  tagSel.addEventListener("change", () => { f.tagId = tagSel.value; renderPendingList(listEl); });
-  filters.appendChild(tagSel);
+  if (state.tags.length) {
+    const tagRow = el("div", { class: "filter-group" });
+    tagRow.appendChild(el("span", { class: "filter-label" }, "Tag:"));
+    state.tags.forEach(tag => {
+      const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (f.tagIds.has(tag.id) ? " active" : "") }, tag.name);
+      chip.style.setProperty("--chip-color", tag.color);
+      chip.addEventListener("click", () => {
+        if (f.tagIds.has(tag.id)) f.tagIds.delete(tag.id); else f.tagIds.add(tag.id);
+        chip.classList.toggle("active", f.tagIds.has(tag.id));
+        renderPendingList(listEl);
+      });
+      tagRow.appendChild(chip);
+    });
+    filters.appendChild(tagRow);
+  }
 
-  const showDoneLbl = el("label", { class: "toggle" });
+  const showDoneLbl = el("label", { class: "toggle filter-toggle" });
   const showDone = el("input", { type: "checkbox" });
   showDone.checked = f.showDone;
   showDone.addEventListener("change", () => { f.showDone = showDone.checked; renderPendingList(listEl); });
@@ -417,9 +434,9 @@ function renderPendingList(container) {
   const f = state.filters;
   let items = state.tasks.slice();
   if (!f.showDone) items = items.filter(t => !t.completed && !isRoutineHidden(t));
-  if (f.type !== "all") items = items.filter(t => t.type === f.type);
-  if (f.imp !== "all") items = items.filter(t => String(t.importance) === f.imp);
-  if (f.tagId !== "all") items = items.filter(t => (t.tags || []).includes(f.tagId));
+  if (f.types.size > 0) items = items.filter(t => f.types.has(t.type));
+  if (f.imps.size > 0) items = items.filter(t => f.imps.has(String(t.importance)));
+  if (f.tagIds.size > 0) items = items.filter(t => (t.tags || []).some(id => f.tagIds.has(id)));
 
   const groups = { atrasadas: [], hoje: [], proximas: [], depois: [], semData: [], concluidas: [] };
   const today = todayISO();
@@ -586,23 +603,23 @@ function renderShopping(root) {
   const cats = state.shopping.categories;
 
   const toolbar = el("div", { class: "shopping-toolbar" });
-  const addBtn = el("button", { type: "button", class: "primary-btn shopping-add-btn" }, "+ Nova Categoria");
-  addBtn.addEventListener("click", () => openCategoryModal());
-  const editBtn = el("button", { type: "button", class: "ghost-btn shopping-edit-btn", title: "Gerenciar categorias" }, "✏️");
-  editBtn.addEventListener("click", () => openManageCategoriesModal());
-  toolbar.append(addBtn, editBtn);
+  const addBtn = el("button", { type: "button", class: "primary-btn shopping-add-btn" }, "+ Adicionar item");
+  addBtn.addEventListener("click", openAddItemModal);
+  toolbar.appendChild(addBtn);
   root.appendChild(toolbar);
 
   if (!cats.length) {
-    root.appendChild(el("div", { class: "empty" }, "Nenhuma categoria. Crie sua primeira categoria de compras."));
+    root.appendChild(el("div", { class: "empty" }, "Nenhum item ainda. Toque em “+ Adicionar item” para começar."));
     return;
   }
-  cats.forEach(cat => root.appendChild(renderShoppingCategory(cat)));
+  const sorted = [...cats].sort((a, b) => b.items.length - a.items.length);
+  sorted.forEach(cat => root.appendChild(renderShoppingCategory(cat)));
 }
 
 function renderShoppingCategory(cat) {
   const card = el("div", { class: "shopping-category" });
   card.style.setProperty("--cat-color", cat.color);
+  card.style.setProperty("--cat-bg", hexToRgba(cat.color, 0.13));
 
   const hdr = el("div", { class: "shopping-cat-header" });
   hdr.addEventListener("click", () => {
@@ -615,8 +632,10 @@ function renderShoppingCategory(cat) {
   const name = el("span", { class: "shopping-cat-name" }, cat.name);
   const unchecked = cat.items.filter(i => !i.checked).length;
   const count = el("span", { class: "shopping-cat-count" }, `${unchecked}/${cat.items.length}`);
+  const editBtn = el("button", { type: "button", class: "shopping-cat-edit", "aria-label": "Editar categoria" }, "✏️");
+  editBtn.addEventListener("click", e => { e.stopPropagation(); openCategoryModal(cat.id); });
   const toggle = el("span", { class: "shopping-cat-chevron" }, cat.collapsed ? "▶" : "▼");
-  hdr.append(dot, name, count, toggle);
+  hdr.append(dot, name, count, editBtn, toggle);
   card.appendChild(hdr);
 
   if (!cat.collapsed) {
@@ -694,15 +713,26 @@ function renderCategoryColorGrid() {
 function saveCategoryModal() {
   const name = document.getElementById("cat-name").value.trim();
   if (!name) { showToast("Informe um nome"); return; }
+  let newId = null;
   if (state.editingCategoryId) {
     const cat = state.shopping.categories.find(c => c.id === state.editingCategoryId);
     if (cat) { cat.name = name; cat.color = state.editingCategoryDraft.color; }
   } else {
-    state.shopping.categories.push({ id: uid(), name, color: state.editingCategoryDraft.color, collapsed: false, items: [] });
+    newId = uid();
+    state.shopping.categories.push({ id: newId, name, color: state.editingCategoryDraft.color, collapsed: true, items: [] });
   }
   save();
   closeCategoryModal();
-  if (!document.getElementById("cat-manage-modal").hidden) renderCatManageList();
+  // if cat-picker is open refresh it; if we came from add-item, auto-select the new category
+  if (!document.getElementById("cat-picker-modal").hidden) {
+    if (newId && state.catPickerContext === "add-item") {
+      state.addItemDraft.categoryId = newId;
+      updateCatSelectDisplay();
+      closeCatPicker();
+    } else {
+      renderCatPickerList();
+    }
+  }
   render();
 }
 
@@ -711,34 +741,80 @@ function deleteCategoryModal() {
   state.shopping.categories = state.shopping.categories.filter(c => c.id !== state.editingCategoryId);
   save();
   closeCategoryModal();
-  if (!document.getElementById("cat-manage-modal").hidden) renderCatManageList();
+  if (!document.getElementById("cat-picker-modal").hidden) renderCatPickerList();
   render();
 }
 
-function openManageCategoriesModal() {
-  renderCatManageList();
-  document.getElementById("cat-manage-modal").hidden = false;
+/* ===== Add-item modal ===== */
+
+function openAddItemModal() {
+  state.addItemDraft = { name: "", categoryId: state.shopping.categories[0]?.id || null };
+  document.getElementById("add-item-name").value = "";
+  updateCatSelectDisplay();
+  document.getElementById("add-item-modal").hidden = false;
 }
 
-function closeManageCategoriesModal() {
-  document.getElementById("cat-manage-modal").hidden = true;
+function closeAddItemModal() {
+  document.getElementById("add-item-modal").hidden = true;
 }
 
-function renderCatManageList() {
-  const ul = document.getElementById("cat-manage-list");
+function updateCatSelectDisplay() {
+  const cat = state.shopping.categories.find(c => c.id === state.addItemDraft.categoryId);
+  const btn = document.getElementById("cat-select-btn");
+  if (btn) btn.textContent = cat ? cat.name : "Selecione uma categoria";
+}
+
+function saveAddItem() {
+  const name = document.getElementById("add-item-name").value.trim();
+  if (!name) { showToast("Informe o nome do item"); return; }
+  if (!state.addItemDraft.categoryId) { showToast("Selecione uma categoria"); return; }
+  const cat = state.shopping.categories.find(c => c.id === state.addItemDraft.categoryId);
+  if (!cat) { showToast("Categoria não encontrada"); return; }
+  cat.items.push({ id: uid(), name, checked: false });
+  cat.collapsed = false;
+  save();
+  closeAddItemModal();
+  render();
+}
+
+/* ===== Cat-picker modal ===== */
+
+function openCatPicker(context) {
+  state.catPickerContext = context;
+  renderCatPickerList();
+  document.getElementById("cat-picker-modal").hidden = false;
+}
+
+function closeCatPicker() {
+  document.getElementById("cat-picker-modal").hidden = true;
+  state.catPickerContext = null;
+}
+
+function renderCatPickerList() {
+  const ul = document.getElementById("cat-picker-list");
   ul.innerHTML = "";
   if (!state.shopping.categories.length) {
-    ul.appendChild(el("li", { class: "empty" }, "Nenhuma categoria criada."));
+    ul.appendChild(el("li", { class: "empty" }, "Nenhuma categoria ainda."));
     return;
   }
   state.shopping.categories.forEach(cat => {
-    const li = el("li");
+    const li = el("li", { class: "cat-picker-row" });
     const sw = el("span", { class: "tag-swatch" });
     sw.style.background = cat.color;
-    li.append(sw, el("span", { class: "text" }, cat.name), el("span", { class: "hint" }, "editar"));
-    li.addEventListener("click", () => {
-      document.getElementById("cat-manage-modal").hidden = true;
+    const nameEl = el("span", { class: "text" }, cat.name);
+    const editBtn = el("button", { type: "button", class: "ghost-btn small", "aria-label": "Editar" }, "✏️");
+    editBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      document.getElementById("cat-picker-modal").hidden = true;
       openCategoryModal(cat.id);
+    });
+    li.append(sw, nameEl, editBtn);
+    li.addEventListener("click", () => {
+      if (state.catPickerContext === "add-item") {
+        state.addItemDraft.categoryId = cat.id;
+        updateCatSelectDisplay();
+        closeCatPicker();
+      }
     });
     ul.appendChild(li);
   });
@@ -1599,10 +1675,25 @@ function setupUI() {
   document.getElementById("cat-save-btn").addEventListener("click", saveCategoryModal);
   document.getElementById("cat-delete-btn").addEventListener("click", deleteCategoryModal);
 
-  // Shopping: manage categories modal
-  document.getElementById("close-cat-manage").addEventListener("click", closeManageCategoriesModal);
-  document.getElementById("cat-manage-modal").addEventListener("click", e => {
-    if (e.target.id === "cat-manage-modal") closeManageCategoriesModal();
+  // Shopping: add-item modal
+  document.getElementById("close-add-item").addEventListener("click", closeAddItemModal);
+  document.getElementById("add-item-modal").addEventListener("click", e => {
+    if (e.target.id === "add-item-modal") closeAddItemModal();
+  });
+  document.getElementById("add-item-save").addEventListener("click", saveAddItem);
+  document.getElementById("add-item-name").addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); saveAddItem(); }
+  });
+  document.getElementById("cat-select-btn").addEventListener("click", () => openCatPicker("add-item"));
+
+  // Shopping: cat-picker modal
+  document.getElementById("close-cat-picker").addEventListener("click", closeCatPicker);
+  document.getElementById("cat-picker-modal").addEventListener("click", e => {
+    if (e.target.id === "cat-picker-modal") closeCatPicker();
+  });
+  document.getElementById("cat-picker-add-btn").addEventListener("click", () => {
+    document.getElementById("cat-picker-modal").hidden = true;
+    openCategoryModal();
   });
 
   // Quick date

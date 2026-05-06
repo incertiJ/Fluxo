@@ -62,6 +62,7 @@ Quando alterar código existente: forneça apenas o trecho mudado, com contexto 
 - Push só após confirmação de que o trabalho está estável.
 - Não crie PR sem o usuário pedir explicitamente.
 - **Nomenclatura de branches**: novas branches seguem o modelo `claude/fluxo-vX.X-<slug>` onde X.X é a versão do produto (ex: `claude/fluxo-v2-shopping-categories`). Slug em kebab-case descrevendo o escopo da mudança.
+- **Nome de branch curto (display)**: ao mencionar a branch para o usuário, usar o formato legível `Fluxo-VXX` (ex: `Fluxo-V20` para v2.0, `Fluxo-V21` para v2.1).
 
 ### 10. Verificação após mudanças
 Sempre que mexer em JS/HTML/CSS:

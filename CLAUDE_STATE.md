@@ -16,6 +16,7 @@ Combina dois papéis:
 **Branch de deploy**: `claude/fluxo-v2`
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
 **Nomenclatura de branches**: `claude/fluxo-vX.X-<slug>` (ex: `claude/fluxo-v2-shopping-categories`)
+**Nome legível (display) de branch**: `Fluxo-VXX` (ex: `Fluxo-V20`, `Fluxo-V21`) — usar ao mencionar branches para o usuário
 
 ---
 
@@ -110,12 +111,39 @@ Combina dois papéis:
 - `offsetMs(amount, unit)` agora suporta `months` (~30d) e `years` (~365d)
 - Digests diários 09h e 22h continuam ativos
 
+### Implementado nesta iteração — 2ª leva (shopping v2 + filtros + calendário)
+
+**Filtros em Pendentes — chips multi-selecionáveis**
+- Substituídos `<select>` por botões chip (toggle on/off, múltipla seleção simultânea)
+- `state.filters.types`, `.imps`, `.tagIds` são agora `Set` (vazio = sem filtro = mostra tudo)
+- Chips de tag aplicam `--chip-color` (cor da tag) quando ativos
+
+**Calendário — sem abertura automática**
+- `setView("calendar")` agora reseta `state.calSelectedDate = null`
+- Entrar na aba Calendário: dia atual apenas destacado visualmente, sem painel aberto
+
+**Aba Compras — segunda iteração**
+- Toolbar simplificada: apenas "+ Adicionar item" (removidos "Nova Categoria" e ✏️ da toolbar)
+- Botão "Adicionar item" abre `add-item-modal` (nome + seletor de categoria)
+- Seletor de categoria abre `cat-picker-modal` com lista de categorias
+  - Cada linha: swatch + nome + botão ✏️ (abre edição sem selecionar)
+  - Clique na linha seleciona a categoria e fecha o picker
+  - Botão "Nova categoria" no rodapé do picker
+- Categorias exibem cor de borda + fundo tintado (`hexToRgba(color, 0.13)` via `--cat-bg`)
+- Botão ✏️ por categoria no header (abre edição da categoria diretamente)
+- Categorias novas criadas com `collapsed: true`
+- Ordem vertical por `items.length` desc (mais itens no topo)
+
+**Estado**
+- `state.addItemDraft: { name, categoryId }` — rascunho do modal de adicionar item
+- `state.catPickerContext: "add-item" | null` — contexto do picker de categorias
+
 ### Estados de execução
 - `state.pendingRenewIds: Set` — IDs de rotinas em renovação (escondidas até confirmação)
 - `state.pendingRenew: { taskId } | null`
 - `state.editingDateTaskId` — task sendo editada via quick-date
 - `state.monthPickerYear` — ano sendo navegado no picker do calendário
-- `state.filters: { type, imp, tagId, showDone }` — sem `q` (busca removida)
+- `state.filters: { types: Set, imps: Set, tagIds: Set, showDone }` — chips multi-select
 
 ---
 
@@ -265,6 +293,14 @@ Registre decisões técnicas e escolhas de produto que NÃO devem ser revisitada
 - Pra hoje = só `=== today`. Overdue não aparece na home (vai pra Pendentes).
 - Texto "Urgente: X horas restantes" para deadline ≤48h no futuro. Overdue continua "vencida há".
 - Tema: 3 estados (Auto/Claro/Escuro). Override via `:root[data-theme]`.
+
+### 2026-05 (shopping v2 + filtros multi-select)
+- Filtros em Pendentes: chips multi-select (Set) em vez de `<select>`. Vazio = sem filtro ativo.
+- Calendário: `setView` reseta `calSelectedDate` — sem painel automático ao entrar na aba.
+- Aba Compras: toolbar com 1 único botão "+ Adicionar item". Gestão de categorias via picker.
+- Picker de categorias: seleção + edição no mesmo modal. Botão "Nova categoria" no rodapé.
+- Fundo das categorias: tint dinâmico `hexToRgba(color, 0.13)` via CSS var `--cat-bg`.
+- Nomenclatura de branches para o usuário: `Fluxo-VXX` (ex: `Fluxo-V20`).
 
 ### 2026-05 (shopping-categories-refactor)
 - Compras: modelo baseado em **categorias**, não listas. Cada categoria tem sua própria lista. Sem lista global de compras.

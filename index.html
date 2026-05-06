@@ -287,16 +287,39 @@
     </div>
   </div>
 
-  <!-- Modal: Gerenciar Categorias de Compras -->
-  <div id="cat-manage-modal" class="modal" hidden>
+  <!-- Modal: Adicionar item de compras -->
+  <div id="add-item-modal" class="modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2>Adicionar item</h2>
+        <button id="close-add-item" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <label class="field">
+          <span>Item</span>
+          <input type="text" id="add-item-name" maxlength="200" placeholder="Ex: Leite, Shampoo...">
+        </label>
+        <label class="field">
+          <span>Categoria</span>
+          <button type="button" id="cat-select-btn" class="cat-select-btn">Selecione uma categoria</button>
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="add-item-save" class="primary-btn">Adicionar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Selecionar / Gerenciar Categorias de Compras -->
+  <div id="cat-picker-modal" class="modal" hidden>
     <div class="modal-content small">
       <header class="modal-header">
         <h2>Categorias</h2>
-        <button id="close-cat-manage" class="icon-btn" aria-label="Fechar">×</button>
+        <button id="close-cat-picker" class="icon-btn" aria-label="Fechar">×</button>
       </header>
       <div class="task-form">
-        <ul id="cat-manage-list" class="tags-manage-list"></ul>
-        <p class="hint">Toque em uma categoria para editar nome ou cor.</p>
+        <ul id="cat-picker-list" class="tags-manage-list"></ul>
+        <button type="button" id="cat-picker-add-btn" class="ghost-btn" style="width:100%;margin-top:8px">+ Nova categoria</button>
       </div>
     </div>
   </div>

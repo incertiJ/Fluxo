@@ -21,7 +21,6 @@
 
   <nav class="tabs" role="tablist">
     <button class="tab active" data-view="home" role="tab">Início</button>
-    <button class="tab" data-view="pending" role="tab">Pendentes</button>
     <button class="tab" data-view="calendar" role="tab">Calendário</button>
     <button class="tab" data-view="shopping" role="tab">Compras</button>
   </nav>
@@ -118,19 +117,31 @@
 
         <fieldset class="field">
           <legend>Notificações</legend>
-          <ul id="notifications-list" class="notifications-list"></ul>
-          <div class="row">
-            <input type="number" id="notif-amount" min="0" max="9999" value="1">
-            <select id="notif-unit">
-              <option value="hours">horas antes</option>
-              <option value="days" selected>dias antes</option>
-              <option value="weeks">semanas antes</option>
-              <option value="months">meses antes</option>
-              <option value="years">anos antes</option>
-            </select>
-            <button type="button" id="add-notif-btn" class="ghost-btn">+</button>
+          <div class="notif-toggle-row">
+            <label class="radio">
+              <input type="radio" name="notif-enabled" value="no" checked>
+              <span>Não</span>
+            </label>
+            <label class="radio">
+              <input type="radio" name="notif-enabled" value="yes">
+              <span>Sim</span>
+            </label>
           </div>
-          <p class="hint">Receba também resumos diários às 09h (hoje) e 22h (amanhã).</p>
+          <div id="notif-details" hidden>
+            <ul id="notifications-list" class="notifications-list"></ul>
+            <div class="row">
+              <input type="number" id="notif-amount" min="0" max="9999" value="1">
+              <select id="notif-unit">
+                <option value="hours">horas antes</option>
+                <option value="days" selected>dias antes</option>
+                <option value="weeks">semanas antes</option>
+                <option value="months">meses antes</option>
+                <option value="years">anos antes</option>
+              </select>
+              <button type="button" id="add-notif-btn" class="ghost-btn">+</button>
+            </div>
+            <p class="hint">Receba também resumos diários às 09h (hoje) e 22h (amanhã).</p>
+          </div>
         </fieldset>
 
         <div class="modal-actions">

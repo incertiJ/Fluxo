@@ -2,16 +2,19 @@
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
-const APP_VERSION = "3.01";
+const APP_VERSION = "4.00";
 
 const CHANGELOG = {
-  "3.01": [
-    "Atualização automática no mobile ao detectar nova versão",
-    "Microfone inline no campo de título (só ícone, sem fundo)",
-    "Filtros de pendências fechados por padrão ao carregar",
-    "Input de nova tag com bordas e cores do app",
-    "Ícone de rotinas alterado para 🚩",
-    "Botão de instalação removido do cabeçalho",
+  "4.00": [
+    "Aba Pendentes removida — tarefas organizadas na tela Início",
+    "Início: 6 seções (Lembrete, Atrasadas, Para hoje, Próxima semana, Mais tarde, Sem data)",
+    "Filtros por Tipo, Categoria, Importância e Prazo na tela Início",
+    "Deslize o dedo para navegar entre as abas",
+    "Toque no cabeçalho de qualquer seção para expandir/recolher",
+    "Notificações por tarefa: padrão desativado (Não/Sim)",
+    "Ícone de rotina (↻) e pontual (⚑) sem cor — só contorno",
+    "Compras: toque no nome da categoria para editar (ícone removido)",
+    "Dropdowns fecham ao tocar em qualquer parte da tela",
   ],
 };
 
@@ -45,7 +48,6 @@ const state = {
   draftTagIds: [],
   recognition: null,
   installPrompt: null,
-  filters: { types: new Set(), imps: new Set(), tagIds: new Set(), showDone: false },
   notifSchedule: [{ h: 9, m: 0 }, { h: 22, m: 0 }],
   appTheme: "auto",
   calMonth: null,
@@ -57,12 +59,13 @@ const state = {
   editingTagDraft: null,
   editingDateTaskId: null,
   editingTagsTaskId: null,
-  homeCollapsed: { reminder: false, today: false },
+  homeCollapsed: { reminder: false, atrasadas: false, today: false, nextweek: true, later: true, nodate: true },
+  homeFilters: { types: new Set(), imps: new Set(), tagIds: new Set(), prazo: "all" },
+  homeFilterOpen: { type: false, imp: false, tag: false, prazo: false },
   editingCategoryId: null,
   editingCategoryDraft: null,
   addItemDraft: { name: "", categoryId: null },
   catPickerContext: null,
-  filterOpen: { type: false, imp: false, tag: false, done: false },
   _lastView: null,
 };
 
@@ -246,12 +249,11 @@ function render() {
   const view = document.getElementById("view");
   const fab = document.getElementById("add-btn");
 
-  // Only play entry animation when the tab changes
   const viewChanged = state.view !== state._lastView;
   state._lastView = state.view;
 
   view.innerHTML = "";
-  view.classList.remove("view--home", "view--scrollable");
+  view.className = "view view--scrollable";
 
   if (viewChanged) {
     void view.offsetWidth;
@@ -261,10 +263,9 @@ function render() {
 
   fab.hidden = state.view === "shopping";
 
-  if (state.view === "home") { view.classList.add("view--home"); renderHome(view); }
-  else if (state.view === "pending") { view.classList.add("view--pending"); renderPending(view); }
-  else if (state.view === "calendar") { view.classList.add("view--scrollable"); renderCalendar(view); }
-  else if (state.view === "shopping") { view.classList.add("view--scrollable"); renderShopping(view); }
+  if (state.view === "home") renderHome(view);
+  else if (state.view === "calendar") renderCalendar(view);
+  else if (state.view === "shopping") renderShopping(view);
 }
 
 function unique(arr, keyFn) {
@@ -279,25 +280,169 @@ function unique(arr, keyFn) {
 
 /* ===== Home ===== */
 
+function taskDue(t) { return t.type === "oneoff" ? t.deadline : t.nextDue; }
+
+function makeFilterDropdown(openObj, key, label, buildBody) {
+  const wrap = el("div", { class: "filter-dropdown" });
+  const hdr = el("button", { type: "button", class: "filter-dropdown-hdr" + (openObj[key] ? " open" : "") });
+  const lspan = el("span", {}, label);
+  const caret = el("span", { class: "filter-caret" }, openObj[key] ? "▲" : "▼");
+  hdr.append(lspan, caret);
+
+  const body = el("div", { class: "filter-dropdown-body" });
+  body.hidden = !openObj[key];
+  buildBody(body);
+
+  const open = () => {
+    openObj[key] = true;
+    hdr.classList.add("open");
+    caret.textContent = "▲";
+    body.hidden = false;
+    setTimeout(() => {
+      const closeOnOutside = e => {
+        if (!wrap.contains(e.target)) {
+          openObj[key] = false;
+          hdr.classList.remove("open");
+          caret.textContent = "▼";
+          body.hidden = true;
+          document.removeEventListener("click", closeOnOutside);
+        }
+      };
+      document.addEventListener("click", closeOnOutside);
+    }, 10);
+  };
+
+  hdr.addEventListener("click", () => {
+    if (openObj[key]) {
+      openObj[key] = false;
+      hdr.classList.remove("open");
+      caret.textContent = "▼";
+      body.hidden = true;
+    } else {
+      open();
+    }
+  });
+
+  wrap.append(hdr, body);
+  return wrap;
+}
+
+function buildHomeFilters(root) {
+  const hf = state.homeFilters;
+  const fo = state.homeFilterOpen;
+  const filters = el("section", { class: "filters" });
+
+  filters.appendChild(makeFilterDropdown(fo, "type", "Tipo", body => {
+    [["oneoff", "Pontual"], ["routine", "Rotina"]].forEach(([v, lbl]) => {
+      const chip = el("button", { type: "button", class: "filter-chip" + (hf.types.has(v) ? " active" : "") }, lbl);
+      chip.addEventListener("click", () => {
+        if (hf.types.has(v)) hf.types.delete(v); else hf.types.add(v);
+        chip.classList.toggle("active", hf.types.has(v));
+        render();
+      });
+      body.appendChild(chip);
+    });
+  }));
+
+  filters.appendChild(makeFilterDropdown(fo, "imp", "Importância", body => {
+    [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
+      const chip = el("button", { type: "button", class: "filter-chip" + (hf.imps.has(v) ? " active" : "") }, lbl);
+      chip.addEventListener("click", () => {
+        if (hf.imps.has(v)) hf.imps.delete(v); else hf.imps.add(v);
+        chip.classList.toggle("active", hf.imps.has(v));
+        render();
+      });
+      body.appendChild(chip);
+    });
+  }));
+
+  filters.appendChild(makeFilterDropdown(fo, "tag", "Categoria", body => {
+    state.tags.forEach(tag => {
+      const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (hf.tagIds.has(tag.id) ? " active" : "") }, tag.name);
+      chip.style.setProperty("--chip-color", tag.color);
+      chip.addEventListener("click", () => {
+        if (hf.tagIds.has(tag.id)) hf.tagIds.delete(tag.id); else hf.tagIds.add(tag.id);
+        chip.classList.toggle("active", hf.tagIds.has(tag.id));
+        render();
+      });
+      body.appendChild(chip);
+    });
+  }));
+
+  filters.appendChild(makeFilterDropdown(fo, "prazo", "Prazo", body => {
+    [["all", "Todos"], ["today", "Hoje"], ["week", "Esta semana"], ["month", "Este mês"], ["nodate", "Sem data"]].forEach(([v, lbl]) => {
+      const chip = el("button", { type: "button", class: "filter-chip" + (hf.prazo === v ? " active" : "") }, lbl);
+      chip.addEventListener("click", () => {
+        hf.prazo = v;
+        body.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
+        chip.classList.add("active");
+        render();
+      });
+      body.appendChild(chip);
+    });
+  }));
+
+  root.appendChild(filters);
+}
+
 function renderHome(root) {
   const today = todayISO();
-  const oneoffs = state.tasks.filter(t => t.type === "oneoff" && !t.completed);
-  const routines = state.tasks.filter(t => t.type === "routine" && !isRoutineHidden(t));
+  const in7 = ymd(new Date(Date.now() + 7 * 86400000));
+  const in30 = ymd(new Date(Date.now() + 30 * 86400000));
+  const hf = state.homeFilters;
 
-  const importantOneoffs = oneoffs.filter(t => t.importance >= 3);
-  const closeOneoffs = oneoffs.filter(t => t.deadline)
-    .sort((a, b) => a.deadline.localeCompare(b.deadline));
-  const homeOneoffs = unique([...importantOneoffs, ...closeOneoffs], t => t.id)
-    .sort((a, b) => {
-      if (a.importance !== b.importance) return b.importance - a.importance;
-      return (a.deadline || "9999").localeCompare(b.deadline || "9999");
-    });
+  buildHomeFilters(root);
 
-  const todayRoutines = routines.filter(r => r.nextDue && r.nextDue <= today)
-    .sort((a, b) => a.nextDue.localeCompare(b.nextDue));
+  function passesFilter(t) {
+    if (hf.types.size > 0 && !hf.types.has(t.type)) return false;
+    if (hf.imps.size > 0 && !hf.imps.has(String(t.importance))) return false;
+    if (hf.tagIds.size > 0 && !(t.tags || []).some(id => hf.tagIds.has(id))) return false;
+    if (hf.prazo !== "all") {
+      const due = taskDue(t);
+      if (hf.prazo === "today" && due !== today) return false;
+      if (hf.prazo === "week" && (!due || due > in7)) return false;
+      if (hf.prazo === "month" && (!due || due > in30)) return false;
+      if (hf.prazo === "nodate" && due) return false;
+    }
+    return true;
+  }
 
-  root.appendChild(makeHomeSection("reminder", "Lembrete", homeOneoffs, "Nada pra lembrar."));
-  root.appendChild(makeHomeSection("today", "Pra hoje", todayRoutines, "Sem rotinas pra hoje."));
+  function isVisible(t) {
+    return !t.completed && !isRoutineHidden(t) && passesFilter(t);
+  }
+
+  const byImp = (a, b) => b.importance - a.importance;
+  const byDueThenImp = (a, b) => (taskDue(a) || "").localeCompare(taskDue(b) || "") || b.importance - a.importance;
+
+  const reminder = state.tasks.filter(t =>
+    isVisible(t) && t.type === "oneoff" && t.importance >= 3 &&
+    !(t.deadline && t.deadline <= today)
+  ).sort((a, b) => byImp(a, b) || (a.deadline || "9999").localeCompare(b.deadline || "9999"));
+
+  const overdue = state.tasks.filter(t => isVisible(t) && taskDue(t) && taskDue(t) < today)
+    .sort(byImp);
+
+  const todayTasks = state.tasks.filter(t => isVisible(t) && taskDue(t) === today)
+    .sort(byImp);
+
+  const nextweek = state.tasks.filter(t => {
+    const due = taskDue(t);
+    return isVisible(t) && due && due > today && due <= in7;
+  }).sort(byDueThenImp);
+
+  const later = state.tasks.filter(t => {
+    const due = taskDue(t);
+    return isVisible(t) && due && due > in7;
+  }).sort(byDueThenImp);
+
+  const nodate = state.tasks.filter(t => isVisible(t) && !taskDue(t)).sort(byImp);
+
+  root.appendChild(makeHomeSection("reminder", "Lembrete", reminder, "Nenhuma tarefa importante próxima."));
+  root.appendChild(makeHomeSection("atrasadas", "Atrasadas", overdue, "Nenhuma tarefa atrasada."));
+  root.appendChild(makeHomeSection("today", "Para hoje", todayTasks, "Nenhuma tarefa para hoje."));
+  root.appendChild(makeHomeSection("nextweek", "Próxima semana", nextweek, "Nenhuma tarefa para a semana."));
+  root.appendChild(makeHomeSection("later", "Mais tarde", later, "Nenhuma tarefa além desta semana."));
+  root.appendChild(makeHomeSection("nodate", "Sem data", nodate, "Nenhuma tarefa sem prazo."));
 }
 
 function makeHomeSection(key, title, tasks, emptyMsg) {
@@ -305,14 +450,16 @@ function makeHomeSection(key, title, tasks, emptyMsg) {
   const sec = el("section", { class: "section section--home" + (collapsed ? " section--collapsed" : "") });
 
   const hdr = el("div", { class: "section-hdr" });
-  hdr.appendChild(el("h2", {}, title));
-  const toggle = el("button", { type: "button", class: "section-toggle" }, collapsed ? "▶" : "▼");
-  toggle.addEventListener("click", e => {
-    e.stopPropagation();
+  const h2 = el("h2", {}, title);
+  if (tasks.length) h2.appendChild(el("span", { class: "section-count" }, String(tasks.length)));
+  hdr.appendChild(h2);
+  hdr.appendChild(el("span", { class: "section-toggle" }, collapsed ? "▶" : "▼"));
+
+  hdr.addEventListener("click", () => {
     state.homeCollapsed[key] = !state.homeCollapsed[key];
     render();
   });
-  hdr.appendChild(toggle);
+
   sec.appendChild(hdr);
 
   if (!collapsed) {
@@ -380,7 +527,7 @@ function renderTaskCard(t) {
   // footer (bottom-right): freq + counter
   const footer = el("div", { class: "task-footer" });
   const freqIcon = el("button", { type: "button", class: "freq-icon", "aria-label": "Frequência" });
-  freqIcon.textContent = t.type === "routine" ? "🚩" : "→";
+  freqIcon.textContent = t.type === "routine" ? "↻" : "⚑";
   freqIcon.addEventListener("click", e => {
     e.stopPropagation();
     const msg = t.type === "routine"
@@ -410,145 +557,6 @@ function renderTaskCard(t) {
   return card;
 }
 
-/* ===== Pendentes ===== */
-
-function renderPending(root) {
-  const f = state.filters;
-  const fo = state.filterOpen;
-
-  // listEl defined first so filter closures can reference it
-  const listEl = el("div", { class: "task-list" });
-  listEl.style.padding = "0";
-
-  const makeDropdown = (key, label, buildBody) => {
-    const wrap = el("div", { class: "filter-dropdown" });
-    const hdr = el("button", { type: "button", class: "filter-dropdown-hdr" + (fo[key] ? " open" : "") });
-    const lspan = el("span", {}, label);
-    const caret = el("span", { class: "filter-caret" }, fo[key] ? "▲" : "▼");
-    hdr.append(lspan, caret);
-
-    const body = el("div", { class: "filter-dropdown-body" });
-    body.hidden = !fo[key];
-    buildBody(body);
-
-    hdr.addEventListener("click", () => {
-      fo[key] = !fo[key];
-      hdr.classList.toggle("open", fo[key]);
-      caret.textContent = fo[key] ? "▲" : "▼";
-      body.hidden = !fo[key];
-    });
-
-    wrap.append(hdr, body);
-    return wrap;
-  };
-
-  const filters = el("section", { class: "filters" });
-
-  filters.appendChild(makeDropdown("type", "Tipo", body => {
-    [["oneoff", "Pontual"], ["routine", "Se repete"]].forEach(([v, lbl]) => {
-      const chip = el("button", { type: "button", class: "filter-chip" + (f.types.has(v) ? " active" : "") }, lbl);
-      chip.addEventListener("click", () => {
-        if (f.types.has(v)) f.types.delete(v); else f.types.add(v);
-        chip.classList.toggle("active", f.types.has(v));
-        renderPendingList(listEl);
-      });
-      body.appendChild(chip);
-    });
-  }));
-
-  filters.appendChild(makeDropdown("imp", "Importância", body => {
-    [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
-      const chip = el("button", { type: "button", class: "filter-chip" + (f.imps.has(v) ? " active" : "") }, lbl);
-      chip.addEventListener("click", () => {
-        if (f.imps.has(v)) f.imps.delete(v); else f.imps.add(v);
-        chip.classList.toggle("active", f.imps.has(v));
-        renderPendingList(listEl);
-      });
-      body.appendChild(chip);
-    });
-  }));
-
-  filters.appendChild(makeDropdown("tag", "Categoria", body => {
-    state.tags.forEach(tag => {
-      const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (f.tagIds.has(tag.id) ? " active" : "") }, tag.name);
-      chip.style.setProperty("--chip-color", tag.color);
-      chip.addEventListener("click", () => {
-        if (f.tagIds.has(tag.id)) f.tagIds.delete(tag.id); else f.tagIds.add(tag.id);
-        chip.classList.toggle("active", f.tagIds.has(tag.id));
-        renderPendingList(listEl);
-      });
-      body.appendChild(chip);
-    });
-  }));
-
-  filters.appendChild(makeDropdown("done", "Concluído", body => {
-    const chip = el("button", { type: "button", class: "filter-chip" + (f.showDone ? " active" : "") }, "Mostrar concluídas");
-    chip.addEventListener("click", () => {
-      f.showDone = !f.showDone;
-      chip.classList.toggle("active", f.showDone);
-      renderPendingList(listEl);
-    });
-    body.appendChild(chip);
-  }));
-
-  root.appendChild(filters);
-
-  // Scrollable area separate from sticky filters
-  const scrollArea = el("div", { class: "pending-scroll" });
-  scrollArea.appendChild(listEl);
-  root.appendChild(scrollArea);
-
-  renderPendingList(listEl);
-}
-
-function renderPendingList(container) {
-  const f = state.filters;
-  let items = state.tasks.slice();
-  if (!f.showDone) items = items.filter(t => !t.completed && !isRoutineHidden(t));
-  if (f.types.size > 0) items = items.filter(t => f.types.has(t.type));
-  if (f.imps.size > 0) items = items.filter(t => f.imps.has(String(t.importance)));
-  if (f.tagIds.size > 0) items = items.filter(t => (t.tags || []).some(id => f.tagIds.has(id)));
-
-  const groups = { atrasadas: [], hoje: [], proximas: [], depois: [], semData: [], concluidas: [] };
-  const today = todayISO();
-  for (const t of items) {
-    if (t.completed) { groups.concluidas.push(t); continue; }
-    const due = t.type === "oneoff" ? t.deadline : t.nextDue;
-    if (!due) { groups.semData.push(t); continue; }
-    const d = diffDays(due, today);
-    if (d < 0) groups.atrasadas.push(t);
-    else if (d === 0) groups.hoje.push(t);
-    else if (d <= 7) groups.proximas.push(t);
-    else groups.depois.push(t);
-  }
-
-  container.innerHTML = "";
-  const renderGroup = (title, list) => {
-    if (!list.length) return;
-    const sec = el("section", { class: "section" });
-    sec.appendChild(el("h2", {}, title));
-    const inner = el("div", { class: "task-list" });
-    list.sort((a, b) => {
-      const da = (a.type === "oneoff" ? a.deadline : a.nextDue) || "9999";
-      const db = (b.type === "oneoff" ? b.deadline : b.nextDue) || "9999";
-      if (da !== db) return da.localeCompare(db);
-      return b.importance - a.importance;
-    });
-    list.forEach(t => inner.appendChild(renderTaskCard(t)));
-    sec.appendChild(inner);
-    container.appendChild(sec);
-  };
-  renderGroup("Atrasadas", groups.atrasadas);
-  renderGroup("Hoje", groups.hoje);
-  renderGroup("Próximos 7 dias", groups.proximas);
-  renderGroup("Depois", groups.depois);
-  renderGroup("Sem data", groups.semData);
-  if (f.showDone) renderGroup("Concluídas", groups.concluidas);
-
-  if (!container.children.length) {
-    container.appendChild(el("div", { class: "empty" }, "Nada por aqui."));
-  }
-}
 
 /* ===== Calendar ===== */
 
@@ -701,12 +709,12 @@ function renderShoppingCategory(cat) {
   const dot = el("span", { class: "shopping-cat-dot" });
   dot.style.background = cat.color;
   const name = el("span", { class: "shopping-cat-name" }, cat.name);
+  name.title = "Toque para editar";
+  name.addEventListener("click", e => { e.stopPropagation(); openCategoryModal(cat.id); });
   const unchecked = cat.items.filter(i => !i.checked).length;
   const count = el("span", { class: "shopping-cat-count" }, `${unchecked}/${cat.items.length}`);
-  const editBtn = el("button", { type: "button", class: "shopping-cat-edit", "aria-label": "Editar categoria" }, "✏️");
-  editBtn.addEventListener("click", e => { e.stopPropagation(); openCategoryModal(cat.id); });
   const toggle = el("span", { class: "shopping-cat-chevron" }, cat.collapsed ? "▶" : "▼");
-  hdr.append(dot, name, count, editBtn, toggle);
+  hdr.append(dot, name, count, toggle);
   card.appendChild(hdr);
 
   if (!cat.collapsed) {
@@ -899,13 +907,7 @@ function renderCatPickerList() {
     const sw = el("span", { class: "tag-swatch" });
     sw.style.background = cat.color;
     const nameEl = el("span", { class: "text" }, cat.name);
-    const editBtn = el("button", { type: "button", class: "ghost-btn small", "aria-label": "Editar" }, "✏️");
-    editBtn.addEventListener("click", e => {
-      e.stopPropagation();
-      document.getElementById("cat-picker-modal").hidden = true;
-      openCategoryModal(cat.id);
-    });
-    li.append(sw, nameEl, editBtn);
+    li.append(sw, nameEl);
     li.addEventListener("click", () => {
       if (state.catPickerContext === "add-item") {
         state.addItemDraft.categoryId = cat.id;
@@ -1085,6 +1087,9 @@ function openTaskModal(id = null) {
   document.querySelector(`input[name="importance"][value="${imp}"]`).checked = true;
 
   state.draftNotifications = t?.notifications ? JSON.parse(JSON.stringify(t.notifications)) : [];
+  const hasNotif = state.draftNotifications.length > 0;
+  document.querySelector(`input[name="notif-enabled"][value="${hasNotif ? "yes" : "no"}"]`).checked = true;
+  document.getElementById("notif-details").hidden = !hasNotif;
   renderNotifications();
 
   state.draftTagIds = t?.tags ? [...t.tags] : [];
@@ -1179,7 +1184,9 @@ function readForm() {
     id: existing?.id || uid(),
     title, description, type, importance,
     tags: state.draftTagIds.slice(),
-    notifications: state.draftNotifications.slice(),
+    notifications: document.querySelector('input[name="notif-enabled"]:checked')?.value === "yes"
+      ? state.draftNotifications.slice()
+      : [],
     completed: existing?.completed || false,
     completedAt: existing?.completedAt || null,
     createdAt: existing?.createdAt || new Date().toISOString(),
@@ -1254,7 +1261,7 @@ function addNewTag() {
   save();
   renderTagsManageList();
   if (!document.getElementById("modal").hidden) renderTagSelector();
-  if (state.view === "pending") render();
+  if (state.view === "home") render();
 }
 
 function openTagEdit(id) {
@@ -1936,6 +1943,30 @@ function setupUI() {
   document.getElementById("create-task-tag-btn").addEventListener("click", createTaskTag);
   document.getElementById("new-task-tag").addEventListener("keydown", e => {
     if (e.key === "Enter") { e.preventDefault(); createTaskTag(); }
+  });
+
+  // Swipe to change tabs
+  const swipeTabs = ["home", "calendar", "shopping"];
+  let touchStartX = 0, touchStartY = 0;
+  const viewEl = document.getElementById("view");
+  viewEl.addEventListener("touchstart", e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+  viewEl.addEventListener("touchend", e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
+    const cur = swipeTabs.indexOf(state.view);
+    if (dx < 0 && cur < swipeTabs.length - 1) setView(swipeTabs[cur + 1]);
+    if (dx > 0 && cur > 0) setView(swipeTabs[cur - 1]);
+  }, { passive: true });
+
+  // Notification toggle
+  document.querySelectorAll('input[name="notif-enabled"]').forEach(r => {
+    r.addEventListener("change", () => {
+      document.getElementById("notif-details").hidden = r.value === "no";
+    });
   });
 }
 

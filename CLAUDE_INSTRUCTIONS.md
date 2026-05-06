@@ -56,7 +56,14 @@ Quando alterar código existente: forneça apenas o trecho mudado, com contexto 
 - Se notar que o contexto está "embolado" (perdendo precisão, confundindo arquivos), avise antes de continuar codando.
 - Após mudanças significativas, lembre o usuário de atualizar `CLAUDE_STATE.md` antes do próximo reset.
 
-### 9. Workflow Git
+### 9. Versão do produto
+- A versão atual do produto está em `CLAUDE_STATE.md` e em `APP_VERSION` no `app.js`.
+- **Mudanças pequenas** (bug fix, ajuste visual, texto): adiciona `+0.01` (ex: 3.00 → 3.01).
+- **Mudanças grandes** (nova funcionalidade, refactor significativo, mudança estrutural): adiciona `+1.00` com reset da parte decimal (ex: 3.01 → 4.00, NÃO 4.01).
+- Toda mudança de versão deve atualizar: `APP_VERSION` em `app.js`, `CLAUDE_STATE.md`.
+- A versão é exibida no badge do header (`version-badge`) e incrementada a cada commit com mudanças.
+
+### 10. Workflow Git
 - Sempre trabalhe em feature branch. Nunca commit em `main` sem permissão.
 - Commits descritivos no formato: `tipo(escopo): mensagem` (feat, fix, refactor, chore, docs).
 - Push só após confirmação de que o trabalho está estável.
@@ -65,19 +72,19 @@ Quando alterar código existente: forneça apenas o trecho mudado, com contexto 
 - **Nome de branch curto (display)**: ao mencionar a branch para o usuário, usar o formato legível `Fluxo-VXX` (ex: `Fluxo-V20` para v2.0, `Fluxo-V21` para v2.1).
 - **⚠️ BRANCH FIXA DO PROJETO**: NUNCA mude a branch de trabalho sem permissão explícita do usuário. Não crie nova branch, não troque para outra branch, não faça push em branch diferente da atual sem ser explicitamente instruído. A branch de trabalho é definida pelo usuário e deve ser respeitada durante toda a sessão.
 
-### 10. Verificação após mudanças
+### 11. Verificação após mudanças
 Sempre que mexer em JS/HTML/CSS:
 1. `node --check` em arquivos JS
 2. Servir local e fazer `curl` rápido pra confirmar 200 em todos os assets
 3. Reportar resultado em 1 linha
 
-### 11. Ferramentas
+### 12. Ferramentas
 - `Edit` para mudanças cirúrgicas. `Write` só para arquivos novos ou rewrite total.
 - `TodoWrite` em qualquer tarefa de 3+ passos. Marque concluído imediatamente — não em batch.
 - Lance subagentes (`Explore`, `Plan`) apenas em pesquisa ampla na codebase, não em tarefas pequenas.
 - Tools em paralelo quando independentes. Sequencial quando há dependência.
 
-### 12. Atualização do estado
+### 13. Atualização do estado
 Ao final de uma sequência relevante de mudanças (antes de o usuário fechar a sessão), proponha atualizar `CLAUDE_STATE.md`:
 - Mover itens de "Pendências Próximas" para "Status Atual" se feitos
 - Atualizar lista de arquivos modificados

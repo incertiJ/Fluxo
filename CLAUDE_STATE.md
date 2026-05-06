@@ -17,6 +17,7 @@ Combina dois papéis:
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
 **Nomenclatura de branches**: `claude/fluxo-vX.X-<slug>` (ex: `claude/fluxo-v2-shopping-categories`)
 **Nome legível (display) de branch**: `Fluxo-VXX` (ex: `Fluxo-V20`, `Fluxo-V21`) — usar ao mencionar branches para o usuário
+**Versão atual**: `3.00`
 
 ---
 
@@ -312,6 +313,28 @@ Registre decisões técnicas e escolhas de produto que NÃO devem ser revisitada
 - Home: seções Lembrete e Pra hoje são colapsáveis individualmente (▼/▶). Estado NÃO persiste no localStorage — reseta a cada sessão.
 - Notificações: logo do Fluxo incluída em todos os canais (inline + SW já tinha desde antes)
 - Nomenclatura de branches: `claude/fluxo-vX.X-<slug>` como padrão oficial
+
+### 2026-05 (v3.00 — terceira leva de mudanças)
+- Versão bumped para **3.00** (grande mudança: tema manual + schedule de notificações configurável)
+- **Regra de versionamento**: pequena = +0.01; grande = +1.00 com reset decimal (2.4 → 3.00, NÃO 3.4)
+- Tema: Auto/Claro/Escuro. CSS via `data-theme` em `<html>`. `applyTheme()` chamada no init e em cada mudança.
+- Notificações configuráveis: `state.notifSchedule: [{h, m}]` substitui 9h/22h fixos. Persiste no localStorage. UI no modal de configurações.
+- Settings modal: aberto clicando na logo. Contém tema (chips) + schedule de notificações (time inputs) + botão testar.
+- Filtro Concluído em Pendentes: dropdown (igual Tipo/Importância/Categoria), não checkbox.
+- Layout Pendentes: `.view--pending` (overflow: hidden) + `.pending-scroll` (flex:1, overflow-y:auto). Itens nunca atravessam o filtro fixo visualmente.
+- Compras — itens editáveis: clique no nome → input inline. Blur/Enter confirma. Escape cancela.
+- Compras — Enter adiciona item e refoca input da mesma categoria (via `data-cat-id` + requestAnimationFrame).
+- Compras — auto-select categoria: ao criar nova categoria pelo picker, `saveCategoryModal` verifica `catPickerContext === "add-item"` independente de visibilidade do picker.
+- Compras — ícone ✏️ discreto: apenas contorno (`border: 1px solid var(--border)`), sem fundo.
+- Compras — botão + da toolbar foi removido (só "+ Adicionar item" existe).
+- Calendário ao entrar na aba: `calSelectedDate = todayISO()` (mostra painel do dia de hoje imediatamente).
+- `buildDigestItem` ID format: `d|HHMM|YYYY-MM-DD` (ex: `d|0900|2026-05-06`).
+- `nextOccurrenceOfTime(h, m, 0)` não avança mais para o dia seguinte: o `notified` Set deduplicata, e o digest do dia que já passou ainda aparece para `checkDueNotifications` disparar se ainda não foi notificado.
+- Limpeza de `notified`: IDs `d|...` limpados por `diffDays`; IDs de tarefa limpos por timestamp.
+- SW: cache bumped para `fluxo-v6`. Re-arma timers em todo evento fetch (mantém notificações vivas).
+- Version badge no header: `<span id="version-badge">` exibindo `v3.00`.
+- `render()` só anima `viewIn` quando a view muda (evita flash em re-renders da mesma aba).
+- Checkbox/radio global: `appearance: none`, fundo transparente, borda `--border-strong`, arredondado; check ✓ branco sobre `--accent`. Regra global — nunca override por componente.
 
 ### Reservado pra próximas decisões
 <!-- Adicionar entradas datadas aqui ao tomar decisões -->

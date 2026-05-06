@@ -2,7 +2,7 @@
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
-const APP_VERSION = "2.4";
+const APP_VERSION = "3.00";
 
 const TAG_COLORS = [
   "#a3d5d2", "#b8d9c4", "#c8d8b0", "#dee2a8",
@@ -35,6 +35,8 @@ const state = {
   recognition: null,
   installPrompt: null,
   filters: { types: new Set(), imps: new Set(), tagIds: new Set(), showDone: false },
+  notifSchedule: [{ h: 9, m: 0 }, { h: 22, m: 0 }],
+  appTheme: "auto",
   calMonth: null,
   calSelectedDate: null,
   monthPickerYear: null,
@@ -49,7 +51,7 @@ const state = {
   editingCategoryDraft: null,
   addItemDraft: { name: "", categoryId: null },
   catPickerContext: null,
-  filterOpen: { type: false, imp: false, tag: false },
+  filterOpen: { type: false, imp: false, tag: false, done: false },
   _lastView: null,
 };
 
@@ -57,6 +59,12 @@ const state = {
 
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function applyTheme() {
+  const root = document.documentElement;
+  if (state.appTheme === "auto") root.removeAttribute("data-theme");
+  else root.dataset.theme = state.appTheme;
+}
 
 function hexToRgba(hex, alpha) {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -73,6 +81,8 @@ function load() {
       state.tasks = data.tasks || [];
       state.tags = data.tags || [];
       state.shopping = data.shopping || { categories: [] };
+      state.notifSchedule = data.notifSchedule || [{ h: 9, m: 0 }, { h: 22, m: 0 }];
+      state.appTheme = data.appTheme || "auto";
     }
   } catch {}
   if (!state.tags.length) {
@@ -87,7 +97,10 @@ function load() {
 }
 
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ tasks: state.tasks, tags: state.tags, shopping: state.shopping }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    tasks: state.tasks, tags: state.tags, shopping: state.shopping,
+    notifSchedule: state.notifSchedule, appTheme: state.appTheme,
+  }));
 }
 
 function getNotified() {
@@ -238,7 +251,7 @@ function render() {
   fab.hidden = state.view === "shopping";
 
   if (state.view === "home") { view.classList.add("view--home"); renderHome(view); }
-  else if (state.view === "pending") { view.classList.add("view--scrollable"); renderPending(view); }
+  else if (state.view === "pending") { view.classList.add("view--pending"); renderPending(view); }
   else if (state.view === "calendar") { view.classList.add("view--scrollable"); renderCalendar(view); }
   else if (state.view === "shopping") { view.classList.add("view--scrollable"); renderShopping(view); }
 }
@@ -392,109 +405,88 @@ function renderPending(root) {
   const f = state.filters;
   const fo = state.filterOpen;
 
-  const filters = el("section", { class: "filters" });
+  // listEl defined first so filter closures can reference it
+  const listEl = el("div", { class: "task-list" });
+  listEl.style.padding = "0";
 
-  const makeDropdown = (key, label, buildChips) => {
+  const makeDropdown = (key, label, buildBody) => {
     const wrap = el("div", { class: "filter-dropdown" });
-    const hdr = el("button", {
-      type: "button",
-      class: "filter-dropdown-hdr" + (fo[key] ? " open" : "")
-    });
-    hdr.innerHTML = `${label} <span class="filter-caret">${fo[key] ? "▲" : "▼"}</span>`;
+    const hdr = el("button", { type: "button", class: "filter-dropdown-hdr" + (fo[key] ? " open" : "") });
+    const lspan = el("span", {}, label);
+    const caret = el("span", { class: "filter-caret" }, fo[key] ? "▲" : "▼");
+    hdr.append(lspan, caret);
+
+    const body = el("div", { class: "filter-dropdown-body" });
+    body.hidden = !fo[key];
+    buildBody(body);
+
     hdr.addEventListener("click", () => {
       fo[key] = !fo[key];
-      renderPendingList(listEl);
-      // re-render only the filter section
-      const newFilters = buildFiltersEl();
-      root.replaceChild(newFilters, filters.parentNode ? filters : root.firstChild);
+      hdr.classList.toggle("open", fo[key]);
+      caret.textContent = fo[key] ? "▲" : "▼";
+      body.hidden = !fo[key];
     });
-    wrap.appendChild(hdr);
-    if (fo[key]) {
-      const body = el("div", { class: "filter-dropdown-body" });
-      buildChips(body);
-      wrap.appendChild(body);
-    }
+
+    wrap.append(hdr, body);
     return wrap;
   };
 
-  // This inner function builds the full filters el so hdr click can swap it
-  const buildFiltersEl = () => {
-    const sec = el("section", { class: "filters" });
+  const filters = el("section", { class: "filters" });
 
-    const makeDropdownInner = (key, label, buildChips) => {
-      const wrap = el("div", { class: "filter-dropdown" });
-      const hdr = el("button", {
-        type: "button",
-        class: "filter-dropdown-hdr" + (fo[key] ? " open" : "")
+  filters.appendChild(makeDropdown("type", "Tipo", body => {
+    [["oneoff", "Pontual"], ["routine", "Se repete"]].forEach(([v, lbl]) => {
+      const chip = el("button", { type: "button", class: "filter-chip" + (f.types.has(v) ? " active" : "") }, lbl);
+      chip.addEventListener("click", () => {
+        if (f.types.has(v)) f.types.delete(v); else f.types.add(v);
+        chip.classList.toggle("active", f.types.has(v));
+        renderPendingList(listEl);
       });
-      hdr.innerHTML = `${label} <span class="filter-caret">${fo[key] ? "▲" : "▼"}</span>`;
-      hdr.addEventListener("click", () => {
-        fo[key] = !fo[key];
-        const rebuilt = buildFiltersEl();
-        sec.replaceWith(rebuilt);
+      body.appendChild(chip);
+    });
+  }));
+
+  filters.appendChild(makeDropdown("imp", "Importância", body => {
+    [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
+      const chip = el("button", { type: "button", class: "filter-chip" + (f.imps.has(v) ? " active" : "") }, lbl);
+      chip.addEventListener("click", () => {
+        if (f.imps.has(v)) f.imps.delete(v); else f.imps.add(v);
+        chip.classList.toggle("active", f.imps.has(v));
+        renderPendingList(listEl);
       });
-      wrap.appendChild(hdr);
-      if (fo[key]) {
-        const body = el("div", { class: "filter-dropdown-body" });
-        buildChips(body);
-        wrap.appendChild(body);
-      }
-      return wrap;
-    };
+      body.appendChild(chip);
+    });
+  }));
 
-    sec.appendChild(makeDropdownInner("type", "Tipo", body => {
-      [["oneoff", "Pontual"], ["routine", "Se repete"]].forEach(([v, lbl]) => {
-        const chip = el("button", { type: "button", class: "filter-chip" + (f.types.has(v) ? " active" : "") }, lbl);
-        chip.addEventListener("click", () => {
-          if (f.types.has(v)) f.types.delete(v); else f.types.add(v);
-          chip.classList.toggle("active", f.types.has(v));
-          renderPendingList(listEl);
-        });
-        body.appendChild(chip);
+  filters.appendChild(makeDropdown("tag", "Categoria", body => {
+    state.tags.forEach(tag => {
+      const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (f.tagIds.has(tag.id) ? " active" : "") }, tag.name);
+      chip.style.setProperty("--chip-color", tag.color);
+      chip.addEventListener("click", () => {
+        if (f.tagIds.has(tag.id)) f.tagIds.delete(tag.id); else f.tagIds.add(tag.id);
+        chip.classList.toggle("active", f.tagIds.has(tag.id));
+        renderPendingList(listEl);
       });
-    }));
+      body.appendChild(chip);
+    });
+  }));
 
-    sec.appendChild(makeDropdownInner("imp", "Importância", body => {
-      [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
-        const chip = el("button", { type: "button", class: "filter-chip" + (f.imps.has(v) ? " active" : "") }, lbl);
-        chip.addEventListener("click", () => {
-          if (f.imps.has(v)) f.imps.delete(v); else f.imps.add(v);
-          chip.classList.toggle("active", f.imps.has(v));
-          renderPendingList(listEl);
-        });
-        body.appendChild(chip);
-      });
-    }));
+  filters.appendChild(makeDropdown("done", "Concluído", body => {
+    const chip = el("button", { type: "button", class: "filter-chip" + (f.showDone ? " active" : "") }, "Mostrar concluídas");
+    chip.addEventListener("click", () => {
+      f.showDone = !f.showDone;
+      chip.classList.toggle("active", f.showDone);
+      renderPendingList(listEl);
+    });
+    body.appendChild(chip);
+  }));
 
-    sec.appendChild(makeDropdownInner("tag", "Categoria", body => {
-      state.tags.forEach(tag => {
-        const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (f.tagIds.has(tag.id) ? " active" : "") }, tag.name);
-        chip.style.setProperty("--chip-color", tag.color);
-        chip.addEventListener("click", () => {
-          if (f.tagIds.has(tag.id)) f.tagIds.delete(tag.id); else f.tagIds.add(tag.id);
-          chip.classList.toggle("active", f.tagIds.has(tag.id));
-          renderPendingList(listEl);
-        });
-        body.appendChild(chip);
-      });
-    }));
+  root.appendChild(filters);
 
-    const showDoneLbl = el("label", { class: "filter-toggle" });
-    const showDone = el("input", { type: "checkbox" });
-    showDone.checked = f.showDone;
-    showDone.addEventListener("change", () => { f.showDone = showDone.checked; renderPendingList(listEl); });
-    showDoneLbl.append(showDone, document.createTextNode(" Mostrar concluídas"));
-    sec.appendChild(showDoneLbl);
+  // Scrollable area separate from sticky filters
+  const scrollArea = el("div", { class: "pending-scroll" });
+  scrollArea.appendChild(listEl);
+  root.appendChild(scrollArea);
 
-    return sec;
-  };
-
-  const filtersEl = buildFiltersEl();
-  root.appendChild(filtersEl);
-
-  const listEl = el("div", { class: "task-list" });
-  listEl.style.padding = "0";
-  root.appendChild(listEl);
   renderPendingList(listEl);
 }
 
@@ -720,11 +712,9 @@ function renderShoppingCategory(cat) {
       });
 
       const nameEl = el("span", { class: "shopping-item-name" }, item.name);
-
-      const editBtn = el("button", { type: "button", class: "shopping-item-edit", "aria-label": "Editar" }, "✏️");
-      editBtn.addEventListener("click", e => {
+      nameEl.title = "Clique para editar";
+      nameEl.addEventListener("click", e => {
         e.stopPropagation();
-        // Replace span with inline input
         const input = el("input", { type: "text", class: "shopping-item-input", value: item.name, maxlength: "200" });
         const confirm = () => {
           const v = input.value.trim();
@@ -737,7 +727,6 @@ function renderShoppingCategory(cat) {
           if (ev.key === "Escape") { render(); }
         });
         nameEl.replaceWith(input);
-        editBtn.remove();
         input.focus();
         input.select();
       });
@@ -749,23 +738,30 @@ function renderShoppingCategory(cat) {
         save();
         render();
       });
-      row.append(cb, nameEl, editBtn, rm);
+      row.append(cb, nameEl, rm);
       body.appendChild(row);
     });
 
-    const addRow = el("div", { class: "shopping-add-row" });
+    const addRow = el("div", { class: "shopping-add-row", "data-cat-id": cat.id });
     const input = el("input", { type: "text", placeholder: "Adicionar item...", maxlength: "200" });
-    const doAdd = () => {
+    const refocusAfterRender = () => {
+      requestAnimationFrame(() => {
+        const inp = document.querySelector(`.shopping-add-row[data-cat-id="${cat.id}"] input`);
+        if (inp) inp.focus();
+      });
+    };
+    const doAdd = (refocus = false) => {
       const v = input.value.trim();
       if (!v) return;
       cat.items.push({ id: uid(), name: v, checked: false });
       input.value = "";
       save();
       render();
+      if (refocus) refocusAfterRender();
     };
     const addItemBtn = el("button", { type: "button", class: "ghost-btn" }, "+");
-    addItemBtn.addEventListener("click", doAdd);
-    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(); } });
+    addItemBtn.addEventListener("click", () => doAdd(false));
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(true); } });
     addRow.append(input, addItemBtn);
     body.appendChild(addRow);
     card.appendChild(body);
@@ -814,15 +810,14 @@ function saveCategoryModal() {
   }
   save();
   closeCategoryModal();
-  // if cat-picker is open refresh it; if we came from add-item, auto-select the new category
-  if (!document.getElementById("cat-picker-modal").hidden) {
-    if (newId && state.catPickerContext === "add-item") {
-      state.addItemDraft.categoryId = newId;
-      updateCatSelectDisplay();
-      closeCatPicker();
-    } else {
-      renderCatPickerList();
-    }
+  // Auto-select new category for add-item regardless of picker visibility
+  if (newId && state.catPickerContext === "add-item") {
+    state.addItemDraft.categoryId = newId;
+    updateCatSelectDisplay();
+    closeCatPicker();
+    state.catPickerContext = null;
+  } else if (!document.getElementById("cat-picker-modal").hidden) {
+    renderCatPickerList();
   }
   render();
 }
@@ -1606,13 +1601,14 @@ function buildScheduledNotifications() {
       }
     }
   }
-  for (let i = 0; i < 2; i++) {
-    const d9 = nextOccurrenceOfTime(9, 0, i);
-    const d22 = nextOccurrenceOfTime(22, 0, i);
-    const a = buildDigestItem(d9, "morning");
-    const b = buildDigestItem(d22, "evening");
-    if (a) items.push(a);
-    if (b) items.push(b);
+  for (const slot of state.notifSchedule) {
+    const { h, m } = slot;
+    const kind = h < 12 ? "morning" : "evening";
+    for (let i = 0; i < 2; i++) {
+      const ms = nextOccurrenceOfTime(h, m, i);
+      const item = buildDigestItem(ms, kind, h, m);
+      if (item) items.push(item);
+    }
   }
   return items;
 }
@@ -1620,22 +1616,24 @@ function buildScheduledNotifications() {
 function nextOccurrenceOfTime(h, m, addDays = 0) {
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  // Do NOT advance past times for addDays=0: checkDueNotifications needs today's
-  // past digest times to fire when the user opens the app after 9h/22h.
+  // Do NOT advance past times for addDays=0: checkDueNotifications fires
+  // missed digest when user opens app after the scheduled hour.
   d.setDate(d.getDate() + addDays);
   return d.getTime();
 }
 
-function buildDigestItem(triggerMs, kind) {
+function buildDigestItem(triggerMs, kind, h = null, m = null) {
   const date = new Date(triggerMs);
   const targetISO = ymd(kind === "morning" ? date : new Date(triggerMs + 86400000));
-  const items = tasksOnDate(targetISO);
-  if (!items.length) return null;
-  const lines = items.slice(0, 6).map(t => `• ${t.title}`);
+  const tasks = tasksOnDate(targetISO);
+  if (!tasks.length) return null;
+  const hh = String(h ?? date.getHours()).padStart(2, "0");
+  const mm = String(m ?? date.getMinutes()).padStart(2, "0");
+  const lines = tasks.slice(0, 6).map(t => `• ${t.title}`);
   return {
-    id: `d|${kind}|${ymd(date)}`,
+    id: `d|${hh}${mm}|${ymd(date)}`,
     title: kind === "morning" ? "Suas tarefas de hoje" : "Tarefas de amanhã",
-    body: lines.join("\n") + (items.length > lines.length ? `\n+${items.length - lines.length} mais` : ""),
+    body: lines.join("\n") + (tasks.length > lines.length ? `\n+${tasks.length - lines.length} mais` : ""),
     triggerMs,
   };
 }
@@ -1694,6 +1692,97 @@ function setupInstall() {
   window.addEventListener("appinstalled", () => { btn.hidden = true; });
 }
 
+/* ===== Settings modal ===== */
+
+function openSettingsModal() {
+  renderSettingsBody();
+  document.getElementById("settings-modal").hidden = false;
+}
+
+function closeSettingsModal() {
+  document.getElementById("settings-modal").hidden = true;
+}
+
+function renderSettingsBody() {
+  const body = document.getElementById("settings-body");
+  body.innerHTML = "";
+
+  // --- Tema ---
+  const themeField = el("fieldset", { class: "field" });
+  themeField.appendChild(el("legend", {}, "Tema"));
+  const themeRow = el("div", { class: "importance-row" });
+  [["auto", "Auto"], ["light", "Claro"], ["dark", "Escuro"]].forEach(([val, lbl]) => {
+    const lbl2 = el("label", { class: "imp-chip", "data-imp": val === state.appTheme ? "sel" : "" });
+    const input = el("input", { type: "radio", name: "theme", value: val });
+    if (state.appTheme === val) input.checked = true;
+    input.addEventListener("change", () => {
+      state.appTheme = val;
+      applyTheme();
+      save();
+      // Update chip styles without full re-render
+      themeRow.querySelectorAll(".imp-chip").forEach(c => c.removeAttribute("data-imp"));
+      lbl2.dataset.imp = "sel";
+    });
+    lbl2.append(input, el("span", {}, lbl));
+    themeRow.appendChild(lbl2);
+  });
+  themeField.appendChild(themeRow);
+  body.appendChild(themeField);
+
+  // --- Notificações diárias ---
+  const notifField = el("fieldset", { class: "field" });
+  notifField.appendChild(el("legend", {}, "Notificações diárias"));
+
+  state.notifSchedule.forEach((slot, i) => {
+    const row = el("div", { class: "notif-slot-row" });
+    const hh = String(slot.h).padStart(2, "0");
+    const mm = String(slot.m).padStart(2, "0");
+    const timeInput = el("input", { type: "time", value: `${hh}:${mm}`, class: "notif-time-input" });
+    timeInput.addEventListener("change", () => {
+      const [h, m] = timeInput.value.split(":").map(Number);
+      state.notifSchedule[i] = { h, m };
+      save();
+      scheduleNotifications();
+    });
+    const rm = el("button", { type: "button", class: "remove-btn" }, "×");
+    rm.addEventListener("click", () => {
+      state.notifSchedule.splice(i, 1);
+      save();
+      scheduleNotifications();
+      renderSettingsBody();
+    });
+    row.append(timeInput, rm);
+    notifField.appendChild(row);
+  });
+
+  // Adicionar novo horário
+  const addRow = el("div", { class: "notif-slot-row" });
+  const newTime = el("input", { type: "time", value: "09:00", class: "notif-time-input" });
+  const addBtn = el("button", { type: "button", class: "ghost-btn" }, "+ Adicionar");
+  addBtn.addEventListener("click", () => {
+    const [h, m] = newTime.value.split(":").map(Number);
+    if (!isNaN(h)) {
+      state.notifSchedule.push({ h, m });
+      save();
+      scheduleNotifications();
+      renderSettingsBody();
+    }
+  });
+  addRow.append(newTime, addBtn);
+  notifField.appendChild(addRow);
+
+  // Testar agora
+  const testBtn = el("button", { type: "button", class: "ghost-btn", style: "margin-top:8px;width:100%" }, "Testar notificação agora");
+  testBtn.addEventListener("click", async () => {
+    if (!(await ensureNotif())) { showToast("Permissão negada"); return; }
+    try { new Notification("Fluxo — Teste", { body: "Notificações estão funcionando!", icon: "./icon.svg", tag: "test-" + Date.now() }); }
+    catch { showToast("Erro ao enviar"); return; }
+    showToast("Notificação enviada");
+  });
+  notifField.appendChild(testBtn);
+  body.appendChild(notifField);
+}
+
 /* ===== util ===== */
 
 function showToast(msg, ms = 2200) {
@@ -1709,6 +1798,13 @@ function showToast(msg, ms = 2200) {
 function setupUI() {
   const vb = document.getElementById("version-badge");
   if (vb) vb.textContent = "v" + APP_VERSION;
+
+  // Settings modal (logo click)
+  document.querySelector(".brand").addEventListener("click", openSettingsModal);
+  document.getElementById("close-settings").addEventListener("click", closeSettingsModal);
+  document.getElementById("settings-modal").addEventListener("click", e => {
+    if (e.target.id === "settings-modal") closeSettingsModal();
+  });
 
   document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
 
@@ -1837,6 +1933,7 @@ async function registerSW() {
 
 async function init() {
   load();
+  applyTheme();
   setupUI();
   setupSpeech();
   setupInstall();

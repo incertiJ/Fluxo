@@ -1,11 +1,11 @@
-const CACHE = "fluxo-v7";
+const CACHE = "fluxo-v8";
+const NOTIF_CACHE = "fluxo-notif";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js",
   "./manifest.json", "./icon.svg"
 ];
 
 const timers = new Map();
-// Persisted schedule so we can re-arm timers if SW is restarted
 let scheduledItems = [];
 
 self.addEventListener("install", e => {
@@ -15,10 +15,30 @@ self.addEventListener("install", e => {
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+      Promise.all(keys.filter(k => k !== CACHE && k !== NOTIF_CACHE).map(k => caches.delete(k)))
+    ).then(() => loadPersistedItems()).then(() => self.clients.claim())
   );
 });
+
+async function loadPersistedItems() {
+  try {
+    const cache = await caches.open(NOTIF_CACHE);
+    const res = await cache.match("scheduled-items");
+    if (res) {
+      scheduledItems = await res.json();
+      rescheduleAll(scheduledItems);
+    }
+  } catch {}
+}
+
+async function persistItems(items) {
+  try {
+    const cache = await caches.open(NOTIF_CACHE);
+    await cache.put("scheduled-items", new Response(JSON.stringify(items), {
+      headers: { "Content-Type": "application/json" }
+    }));
+  } catch {}
+}
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
@@ -43,6 +63,7 @@ self.addEventListener("message", e => {
   if (data.type === "SKIP_WAITING") { self.skipWaiting(); return; }
   if (data.type === "schedule") {
     scheduledItems = data.items || [];
+    persistItems(scheduledItems);
     rescheduleAll(scheduledItems);
   }
 });
@@ -53,7 +74,6 @@ function rescheduleAll(items) {
   const now = Date.now();
   for (const item of items) {
     const delay = item.triggerMs - now;
-    // Only schedule notifications within the next 25 hours
     if (delay <= 0 || delay > 25 * 3600000) continue;
     const handle = setTimeout(() => {
       self.registration.showNotification(item.title, {
@@ -68,7 +88,7 @@ function rescheduleAll(items) {
   }
 }
 
-// Re-arm timers whenever SW wakes due to a fetch (keeps notifications alive)
+// Re-arm timers whenever SW wakes due to a fetch
 self.addEventListener("fetch", () => {
   if (scheduledItems.length && timers.size === 0) rescheduleAll(scheduledItems);
 }, { passive: true });

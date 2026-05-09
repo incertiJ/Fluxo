@@ -1,11 +1,29 @@
-/* Fluxo v5.00 */
+/* Fluxo v5.01 */
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "5.00";
+const APP_VERSION = "5.01";
+const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "5.01": [
+    "Login com PIN de 4 dígitos + biometria (digital/rosto) via WebAuthn",
+    "Filtros de tarefas: 3 dropdowns empilhados (Importância, Categoria, Frequência)",
+    "Calendário: sempre 5 linhas, bolinhas coloridas por score, número sempre visível",
+    "Click fora de dropdown fecha sem acionar elemento embaixo",
+    "Fog de transição entre abas: mais visível e mais suave",
+    "Compras: click no header expande/colapsa; long press edita a lista",
+    "Compras: cor do texto dos itens = cor da categoria",
+    "Compras: click no nome do item = edição inline",
+    "Notas: long press no caderno = editar; barra de ferramentas no editor",
+    "Editor de notas: T / N / I / Cor / Lista insere markdown no cursor",
+    "Editor de notas: linhas de caderno no fundo do textarea",
+    "Subtarefas: click no texto = edição inline",
+    "Seção 'Feitas' na aba Tarefas com tarefas concluídas",
+    "Notificações: notifs perdidas (SW desligado) são exibidas ao abrir o app",
+    "Notificações: agendamento persistente via Cache API no Service Worker",
+  ],
   "5.00": [
     "Aba Início renomeada para Tarefas",
     "Aba Calendário removida — mini-calendário embutido na aba Tarefas",
@@ -66,9 +84,9 @@ const state = {
   editingTagDraft: null,
   editingDateTaskId: null,
   editingTagsTaskId: null,
-  homeCollapsed: { reminder: false, atrasadas: true, today: true, nextweek: true, later: true },
+  homeCollapsed: { reminder: false, atrasadas: true, today: true, nextweek: true, later: true, done: true },
   homeFilters: { types: new Set(), imps: new Set(), tagIds: new Set() },
-  homeFilterOpen: { freq: false, imp: false, tag: false },
+  homeFilterOpen: { imp: false, tag: false, freq: false },
   tasksSortBy: "importance",
   editingCategoryId: null,
   editingCategoryDraft: null,
@@ -309,14 +327,16 @@ function makeFilterDropdown(openObj, key, label, buildBody) {
     setTimeout(() => {
       const closeOnOutside = e => {
         if (!wrap.contains(e.target)) {
+          e.stopPropagation();
+          e.preventDefault();
           openObj[key] = false;
           hdr.classList.remove("open");
           caret.textContent = "▼";
           body.hidden = true;
-          document.removeEventListener("click", closeOnOutside);
+          document.removeEventListener("click", closeOnOutside, true);
         }
       };
-      document.addEventListener("click", closeOnOutside);
+      document.addEventListener("click", closeOnOutside, true);
     }, 10);
   };
 
@@ -340,38 +360,22 @@ function buildFilterPanel() {
   const fo = state.homeFilterOpen;
   const panel = el("div", { class: "filter-cal-box" });
 
-  // Left: filters
+  // Left: 3 dropdowns stacked (Importância, Categoria, Frequência)
   const left = el("div", { class: "filter-left" });
 
-  // Row 1: sort icon + frequência chips
-  const row1 = el("div", { class: "filter-row" });
-
-  const sortBtn = el("button", { type: "button", class: "sort-btn" + (state.tasksSortBy === "date" ? " active" : ""), title: state.tasksSortBy === "date" ? "Ordenar por importância" : "Ordenar por data" });
-  sortBtn.textContent = "⇅";
-  sortBtn.addEventListener("click", () => {
-    state.tasksSortBy = state.tasksSortBy === "importance" ? "date" : "importance";
-    render();
-  });
-  row1.appendChild(sortBtn);
-
-  // Frequência chips inline (not dropdown)
-  const freqGroup = el("div", { class: "filter-chips-inline" });
-  [["oneoff", "Pontual"], ["routine", "Rotina"]].forEach(([v, lbl]) => {
-    const chip = el("button", { type: "button", class: "filter-chip-inline" + (hf.types.has(v) ? " active" : "") }, lbl);
-    chip.addEventListener("click", () => {
-      if (hf.types.has(v)) hf.types.delete(v); else hf.types.add(v);
-      chip.classList.toggle("active", hf.types.has(v));
-      render();
+  left.appendChild(makeFilterDropdown(fo, "imp", "Importância", body => {
+    [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
+      const chip = el("button", { type: "button", class: "filter-chip" + (hf.imps.has(v) ? " active" : "") }, lbl);
+      chip.addEventListener("click", () => {
+        if (hf.imps.has(v)) hf.imps.delete(v); else hf.imps.add(v);
+        chip.classList.toggle("active", hf.imps.has(v));
+        render();
+      });
+      body.appendChild(chip);
     });
-    freqGroup.appendChild(chip);
-  });
-  row1.appendChild(freqGroup);
-  left.appendChild(row1);
+  }));
 
-  // Row 2: categoria + importância dropdowns
-  const row2 = el("div", { class: "filter-row" });
-
-  row2.appendChild(makeFilterDropdown(fo, "tag", "Categoria", body => {
+  left.appendChild(makeFilterDropdown(fo, "tag", "Categoria", body => {
     state.tags.forEach(tag => {
       const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (hf.tagIds.has(tag.id) ? " active" : "") }, tag.name);
       chip.style.setProperty("--chip-color", tag.color);
@@ -384,22 +388,21 @@ function buildFilterPanel() {
     });
   }));
 
-  row2.appendChild(makeFilterDropdown(fo, "imp", "Importância", body => {
-    [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
-      const chip = el("button", { type: "button", class: "filter-chip" + (hf.imps.has(v) ? " active" : "") }, lbl);
+  left.appendChild(makeFilterDropdown(fo, "freq", "Frequência", body => {
+    [["oneoff", "Pontual"], ["routine", "Rotina"]].forEach(([v, lbl]) => {
+      const chip = el("button", { type: "button", class: "filter-chip" + (hf.types.has(v) ? " active" : "") }, lbl);
       chip.addEventListener("click", () => {
-        if (hf.imps.has(v)) hf.imps.delete(v); else hf.imps.add(v);
-        chip.classList.toggle("active", hf.imps.has(v));
+        if (hf.types.has(v)) hf.types.delete(v); else hf.types.add(v);
+        chip.classList.toggle("active", hf.types.has(v));
         render();
       });
       body.appendChild(chip);
     });
   }));
 
-  left.appendChild(row2);
   panel.appendChild(left);
 
-  // Right: mini calendar
+  // Right: mini calendar (takes remaining 60%)
   panel.appendChild(buildMiniCalendar());
 
   return panel;
@@ -442,18 +445,14 @@ function buildMiniCalendar() {
   const daysInMonth = new Date(y, m + 1, 0).getDate();
   const prevDays = new Date(y, m, 0).getDate();
 
-  for (let i = 0; i < startDow; i++) {
-    const day = prevDays - startDow + 1 + i;
-    grid.appendChild(makeMiniCalCell(y, m - 1, day, true));
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    grid.appendChild(makeMiniCalCell(y, m, d, false));
-  }
-  const total = startDow + daysInMonth;
-  const trailing = (7 - (total % 7)) % 7;
-  for (let i = 1; i <= trailing; i++) {
-    grid.appendChild(makeMiniCalCell(y, m + 1, i, true));
-  }
+  const TOTAL_CELLS = 35;
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push({ cy: m === 0 ? y - 1 : y, cm: m === 0 ? 11 : m - 1, cd: prevDays - startDow + 1 + i, out: true });
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ cy: y, cm: m, cd: d, out: false });
+  const nextM = m === 11 ? 0 : m + 1, nextY = m === 11 ? y + 1 : y;
+  let trailing = 1;
+  while (cells.length < TOTAL_CELLS) cells.push({ cy: nextY, cm: nextM, cd: trailing++, out: true });
+  cells.slice(0, TOTAL_CELLS).forEach(({ cy, cm, cd, out }) => grid.appendChild(makeMiniCalCell(cy, cm, cd, out)));
 
   wrap.appendChild(grid);
   return wrap;
@@ -462,7 +461,8 @@ function buildMiniCalendar() {
 function makeMiniCalCell(y, m, d, outside) {
   const date = new Date(y, m, d);
   const ds = ymd(date);
-  const hasTasks = tasksOnDate(ds).length > 0;
+  const tasks = tasksOnDate(ds);
+  const score = tasks.reduce((s, t) => s + scoreFor(t), 0);
   const isSelected = ds === state.tasksCalDate;
   const isToday = ds === todayISO();
 
@@ -471,17 +471,19 @@ function makeMiniCalCell(y, m, d, outside) {
       + (outside ? " outside" : "")
       + (isToday ? " today" : "")
       + (isSelected ? " selected" : "")
-      + (hasTasks ? " has-tasks" : "")
   });
-  cell.appendChild(el("span", {}, String(date.getDate())));
+  cell.appendChild(el("span", { class: "mini-cal-day-num" }, String(date.getDate())));
+
+  if (score > 0) {
+    const dot = el("span", { class: "mini-cal-day-dot" });
+    const style = scoreDotStyle(score);
+    dot.style.background = style ? style.color : "var(--accent)";
+    cell.appendChild(dot);
+  }
 
   cell.addEventListener("click", () => {
-    if (hasTasks) {
-      openDayTasksModal(ds);
-    } else {
-      state.tasksCalDate = isSelected ? null : ds;
-      render();
-    }
+    if (tasks.length) openDayTasksModal(ds);
+    else { state.tasksCalDate = isSelected ? null : ds; render(); }
   });
   return cell;
 }
@@ -553,11 +555,16 @@ function renderHome(root) {
     return da.localeCompare(db) || b.importance - a.importance;
   });
 
+  const done = state.tasks
+    .filter(t => t.type === "oneoff" && t.completed)
+    .sort((a, b) => (b.completedAt || "").localeCompare(a.completedAt || ""));
+
   scroll.appendChild(makeHomeSection("reminder", "Lembrete", reminder, "Nenhuma tarefa importante próxima."));
   scroll.appendChild(makeHomeSection("atrasadas", "Atrasadas", overdue, "Nenhuma tarefa atrasada."));
   scroll.appendChild(makeHomeSection("today", "Para hoje", todayTasks, "Nenhuma tarefa para hoje."));
   scroll.appendChild(makeHomeSection("nextweek", "Próxima semana", nextweek, "Nenhuma tarefa para a semana."));
   scroll.appendChild(makeHomeSection("later", "Mais tarde", later, "Nenhuma tarefa além desta semana."));
+  scroll.appendChild(makeHomeSection("done", "Feitas", done, "Nenhuma tarefa concluída."));
   root.appendChild(scroll);
 }
 
@@ -696,16 +703,23 @@ function renderShoppingCategory(cat) {
   card.style.setProperty("--cat-tint", hexToRgba(cat.color, 0.07));
 
   const hdr = el("div", { class: "shopping-cat-header" });
+
+  // Click = expand/collapse
   hdr.addEventListener("click", () => {
     cat.collapsed = !cat.collapsed;
     save();
     render();
   });
+
+  // Long press = edit category
+  let catLp = null;
+  hdr.addEventListener("touchstart", () => { catLp = setTimeout(() => { catLp = null; openCategoryModal(cat.id); }, 600); }, { passive: true });
+  hdr.addEventListener("touchend", () => { clearTimeout(catLp); catLp = null; }, { passive: true });
+  hdr.addEventListener("touchmove", () => { clearTimeout(catLp); catLp = null; }, { passive: true });
+
   const dot = el("span", { class: "shopping-cat-dot" });
   dot.style.background = cat.color;
   const name = el("span", { class: "shopping-cat-name" }, cat.name);
-  name.title = "Toque para editar";
-  name.addEventListener("click", e => { e.stopPropagation(); openCategoryModal(cat.id); });
   const unchecked = cat.items.filter(i => !i.checked).length;
   const count = el("span", { class: "shopping-cat-count" }, `${unchecked}/${cat.items.length}`);
   const toggle = el("span", { class: "shopping-cat-chevron" }, cat.collapsed ? "▶" : "▼");
@@ -717,7 +731,6 @@ function renderShoppingCategory(cat) {
 
     cat.items.forEach((item, i) => {
       const row = el("div", { class: "shopping-item" + (item.checked ? " checked" : "") });
-      row.style.background = "var(--cat-tint)";
 
       const cb = el("input", { type: "checkbox", class: "styled-check" });
       cb.checked = item.checked;
@@ -729,19 +742,27 @@ function renderShoppingCategory(cat) {
       });
 
       const nameEl = el("span", { class: "shopping-item-name" }, item.name);
+      nameEl.style.color = cat.color;
 
-      // Long press → inline edit with color + title + OK
-      let longPressTimer = null;
-      const startLongPress = () => {
-        longPressTimer = setTimeout(() => {
-          longPressTimer = null;
-          activateItemEdit(cat, i, row, cb);
-        }, 550);
-      };
-      const cancelLongPress = () => { clearTimeout(longPressTimer); longPressTimer = null; };
-      row.addEventListener("touchstart", startLongPress, { passive: true });
-      row.addEventListener("touchend", cancelLongPress, { passive: true });
-      row.addEventListener("touchmove", cancelLongPress, { passive: true });
+      // Click → inline edit
+      nameEl.addEventListener("click", e => {
+        e.stopPropagation();
+        const input = el("input", { type: "text", class: "shopping-item-input", value: item.name, maxlength: "200" });
+        const confirm = () => {
+          const v = input.value.trim();
+          if (v) { cat.items[i].name = v; save(); }
+          input.replaceWith(nameEl);
+          nameEl.textContent = cat.items[i].name;
+        };
+        input.addEventListener("blur", confirm);
+        input.addEventListener("keydown", ev => {
+          if (ev.key === "Enter") { ev.preventDefault(); confirm(); }
+          if (ev.key === "Escape") { input.replaceWith(nameEl); }
+        });
+        nameEl.replaceWith(input);
+        input.focus();
+        input.select();
+      });
 
       const rm = el("button", { type: "button", class: "remove-btn" }, "×");
       rm.addEventListener("click", e => {
@@ -972,10 +993,15 @@ function renderNotebook(nb) {
     render();
   });
 
+  // Long press = edit notebook
+  let nbLp = null;
+  hdr.addEventListener("touchstart", () => { nbLp = setTimeout(() => { nbLp = null; openNotebookModal(nb.id); }, 600); }, { passive: true });
+  hdr.addEventListener("touchend", () => { clearTimeout(nbLp); nbLp = null; }, { passive: true });
+  hdr.addEventListener("touchmove", () => { clearTimeout(nbLp); nbLp = null; }, { passive: true });
+
   const dot = el("span", { class: "notebook-dot" });
   dot.style.background = nb.color;
   const name = el("span", { class: "notebook-name" }, nb.name);
-  name.addEventListener("click", e => { e.stopPropagation(); openNotebookModal(nb.id); });
 
   const pages = state.notes.pages.filter(p => p.notebookId === nb.id);
   const count = el("span", { class: "shopping-cat-count" }, `${pages.length} pág.`);
@@ -1065,16 +1091,14 @@ function deleteNotebookModal() {
 
 function openNotePage(pageId, notebookId = null) {
   state.editingPageId = pageId;
-  state.pagePreviewMode = false;
   const page = pageId ? state.notes.pages.find(p => p.id === pageId) : null;
   document.getElementById("page-title-input").value = page?.name || "";
   document.getElementById("page-content-input").value = page?.content || "";
-  document.getElementById("page-preview").hidden = true;
-  document.getElementById("page-editor").hidden = false;
-  document.getElementById("page-preview-btn").textContent = "Pré-vis.";
-  // Store notebookId for new pages
   document.getElementById("notes-page-modal").dataset.notebookId = notebookId || page?.notebookId || "";
   document.getElementById("notes-page-modal").hidden = false;
+  // Close color picker if open
+  const picker = document.querySelector(".page-tool-color-picker");
+  if (picker) picker.hidden = true;
 }
 
 function closeNotePage() {
@@ -1082,22 +1106,7 @@ function closeNotePage() {
   state.editingPageId = null;
 }
 
-function togglePagePreview() {
-  state.pagePreviewMode = !state.pagePreviewMode;
-  const preview = document.getElementById("page-preview");
-  const editor = document.getElementById("page-editor");
-  const btn = document.getElementById("page-preview-btn");
-  if (state.pagePreviewMode) {
-    preview.innerHTML = renderMarkdown(document.getElementById("page-content-input").value);
-    preview.hidden = false;
-    editor.hidden = true;
-    btn.textContent = "Editar";
-  } else {
-    preview.hidden = true;
-    editor.hidden = false;
-    btn.textContent = "Pré-vis.";
-  }
-}
+/* page preview removed — editor is always active */
 
 function saveNotePage() {
   const name = document.getElementById("page-title-input").value.trim() || "Sem título";
@@ -1150,6 +1159,84 @@ function renderMarkdown(text) {
   html = html.replace(/(?<![>])\n/g, "<br>");
 
   return html;
+}
+
+/* ===== Notes page toolbar ===== */
+
+function setupPageToolbar() {
+  const toolbar = document.querySelector(".page-toolbar");
+  if (!toolbar) return;
+  const picker = toolbar.querySelector(".page-tool-color-picker");
+
+  // Build color swatches
+  TAG_COLORS.forEach(c => {
+    const b = el("button", { type: "button", class: "page-tool-color-swatch" });
+    b.style.background = c;
+    b.addEventListener("click", () => {
+      applyColorAction(document.getElementById("page-content-input"), c);
+      picker.hidden = true;
+      document.getElementById("page-content-input").focus();
+    });
+    picker.appendChild(b);
+  });
+
+  toolbar.addEventListener("click", e => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) {
+      // Click outside any button within toolbar — close color picker
+      if (!picker.contains(e.target)) picker.hidden = true;
+      return;
+    }
+    const action = btn.dataset.action;
+    if (action === "color") {
+      picker.hidden = !picker.hidden;
+      return;
+    }
+    picker.hidden = true;
+    applyMarkdownAction(document.getElementById("page-content-input"), action);
+    document.getElementById("page-content-input").focus();
+  });
+
+  // Close picker when clicking outside toolbar
+  document.addEventListener("click", e => {
+    if (!toolbar.contains(e.target)) picker.hidden = true;
+  });
+}
+
+function applyMarkdownAction(ta, action) {
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const text = ta.value;
+  const selected = text.slice(start, end);
+
+  if (action === "title" || action === "list") {
+    const prefix = action === "title" ? "# " : "- ";
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    const lineEnd = text.indexOf("\n", start);
+    const line = text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
+    const hasMd = line.startsWith(prefix);
+    const newLine = hasMd ? line.slice(prefix.length) : prefix + line;
+    const after = lineEnd === -1 ? "" : text.slice(lineEnd);
+    ta.value = text.slice(0, lineStart) + newLine + after;
+    const pos = lineStart + newLine.length;
+    ta.setSelectionRange(pos, pos);
+    return;
+  }
+
+  const wrap = action === "bold" ? "**" : "*";
+  const insertion = wrap + (selected || "") + wrap;
+  ta.value = text.slice(0, start) + insertion + text.slice(end);
+  ta.setSelectionRange(start + wrap.length, start + wrap.length + (selected || "").length);
+}
+
+function applyColorAction(ta, color) {
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const text = ta.value;
+  const selected = text.slice(start, end) || "texto";
+  const insertion = `<span style="color:${color}">${selected}</span>`;
+  ta.value = text.slice(0, start) + insertion + text.slice(end);
+  ta.setSelectionRange(start, start + insertion.length);
 }
 
 /* ===== Animations ===== */
@@ -1349,7 +1436,24 @@ function renderSubtasks() {
     const cb = el("input", { type: "checkbox" });
     cb.checked = !!s.completed;
     cb.addEventListener("change", () => { state.draftSubtasks[i].completed = cb.checked; renderSubtasks(); });
-    const span = el("span", { class: "text" }, s.title);
+    const span = el("span", { class: "text", style: "cursor:pointer" }, s.title);
+    span.addEventListener("click", e => {
+      e.stopPropagation();
+      const input = el("input", { type: "text", class: "subtask-inline-input", value: s.title, maxlength: "200" });
+      const confirm = () => {
+        const v = input.value.trim();
+        if (v) state.draftSubtasks[i].title = v;
+        renderSubtasks();
+      };
+      input.addEventListener("blur", confirm);
+      input.addEventListener("keydown", ev => {
+        if (ev.key === "Enter") { ev.preventDefault(); confirm(); }
+        if (ev.key === "Escape") { renderSubtasks(); }
+      });
+      span.replaceWith(input);
+      input.focus();
+      input.select();
+    });
     const rm = el("button", { type: "button", class: "remove-btn" }, "×");
     rm.addEventListener("click", () => { state.draftSubtasks.splice(i, 1); renderSubtasks(); });
     li.append(cb, span, rm);
@@ -1828,9 +1932,10 @@ function dueMsFor(t) {
   return d.getTime();
 }
 
-function buildScheduledNotifications() {
+function buildScheduledNotifications(lookbackMs = 0) {
   const now = Date.now();
   const horizon = now + 7 * 86400000;
+  const since = now - lookbackMs;
   const items = [];
   for (const t of state.tasks) {
     if (t.completed) continue;
@@ -1838,7 +1943,7 @@ function buildScheduledNotifications() {
     if (!baseMs) continue;
     for (const n of t.notifications || []) {
       const trigger = baseMs - offsetMs(n.amount, n.unit);
-      if (trigger > now && trigger < horizon) {
+      if (trigger > since && trigger < horizon) {
         items.push({
           id: `t|${t.id}|${baseMs}|${n.amount}|${n.unit}`,
           title: t.title,
@@ -1863,7 +1968,11 @@ function buildScheduledNotifications() {
 function nextOccurrenceOfTime(h, m, addDays = 0) {
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  d.setDate(d.getDate() + addDays);
+  if (addDays === 0 && d.getTime() <= Date.now()) {
+    d.setDate(d.getDate() + 1);
+  } else {
+    d.setDate(d.getDate() + addDays);
+  }
   return d.getTime();
 }
 
@@ -1885,16 +1994,19 @@ function buildDigestItem(triggerMs, kind, h = null, m = null) {
 
 async function scheduleNotifications() {
   if (!(await ensureNotif())) return;
-  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.controller.postMessage({ type: "schedule", items: buildScheduledNotifications() });
-  }
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const ctrl = navigator.serviceWorker.controller || reg.active;
+    if (ctrl) ctrl.postMessage({ type: "schedule", items: buildScheduledNotifications() });
+  } catch {}
 }
 
 function checkDueNotifications() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const now = Date.now();
   const notified = getNotified();
-  const items = buildScheduledNotifications();
+  const items = buildScheduledNotifications(24 * 3600000); // look back 24h for missed notifs
   const allIds = new Set(items.map(i => i.id));
   for (const it of items) {
     if (it.triggerMs <= now && !notified.has(it.id)) {
@@ -1999,6 +2111,17 @@ function renderSettingsBody() {
   });
   notifField.appendChild(testBtn);
   body.appendChild(notifField);
+
+  // Security: PIN change
+  const secField = el("fieldset", { class: "field" });
+  secField.appendChild(el("legend", {}, "Segurança"));
+  const changePinBtn = el("button", { type: "button", class: "ghost-btn", style: "width:100%" }, "Alterar PIN");
+  changePinBtn.addEventListener("click", () => {
+    closeSettingsModal();
+    showChangePinFlow();
+  });
+  secField.appendChild(changePinBtn);
+  body.appendChild(secField);
 }
 
 /* ===== Changelog modal ===== */
@@ -2200,7 +2323,7 @@ function setupUI() {
     if (e.target.id === "notes-page-modal") closeNotePage();
   });
   document.getElementById("page-save-btn").addEventListener("click", saveNotePage);
-  document.getElementById("page-preview-btn").addEventListener("click", togglePagePreview);
+  setupPageToolbar();
 
   // Notification toggle
   document.querySelectorAll('input[name="notif-enabled"]').forEach(r => {
@@ -2226,7 +2349,7 @@ function setupUI() {
     const dx = e.touches[0].clientX - touchStartX;
     const absDx = Math.abs(dx);
     if (absDx < 8) { fogEl.style.opacity = "0"; return; }
-    const opacity = Math.min(absDx / 150, 1) * 0.15;
+    const opacity = Math.min(absDx / 120, 1) * 0.35;
     fogEl.style.opacity = String(opacity);
     const dir = dx > 0 ? "to right" : "to left";
     fogEl.style.background = `linear-gradient(${dir}, var(--accent), transparent)`;
@@ -2254,6 +2377,265 @@ function setupUI() {
   }, { passive: true });
 }
 
+/* ===== Auth (PIN + WebAuthn) ===== */
+
+function loadAuth() {
+  try { return JSON.parse(localStorage.getItem(AUTH_KEY) || "null"); }
+  catch { return null; }
+}
+function saveAuth(data) { localStorage.setItem(AUTH_KEY, JSON.stringify(data)); }
+
+async function hashPin(pin) {
+  try {
+    const data = new TextEncoder().encode(pin + "fluxo-salt-v1");
+    const buf = await crypto.subtle.digest("SHA-256", data);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+  } catch {
+    // Fallback if SubtleCrypto not available (should not happen in HTTPS context)
+    return btoa(pin + "fluxo-salt-v1");
+  }
+}
+
+function hasWebAuthn() {
+  return typeof window.PublicKeyCredential !== "undefined" &&
+    typeof navigator.credentials?.create === "function";
+}
+
+function buildAuthPad(onDigit, onDelete, onBio = null) {
+  const pad = el("div", { class: "auth-pad" });
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "⌫"].forEach(d => {
+    if (d === "") { pad.appendChild(el("button", { type: "button", class: "auth-key auth-key--empty", disabled: true }, "")); return; }
+    const cls = d === "⌫" ? "auth-key auth-key--del" : "auth-key";
+    const btn = el("button", { type: "button", class: cls }, String(d));
+    btn.addEventListener("click", () => d === "⌫" ? onDelete() : onDigit(String(d)));
+    pad.appendChild(btn);
+  });
+  if (onBio) {
+    // Replace center-bottom button with bio button
+    const keys = pad.querySelectorAll(".auth-key");
+    const emptySlot = keys[9];
+    const bioBtn = el("button", { type: "button", class: "auth-key auth-key--bio" }, "⬡");
+    bioBtn.title = "Biometria";
+    bioBtn.addEventListener("click", onBio);
+    emptySlot.replaceWith(bioBtn);
+  }
+  return pad;
+}
+
+function buildDotDisplay(len) {
+  const wrap = el("div", { class: "auth-dots" });
+  for (let i = 0; i < 4; i++) wrap.appendChild(el("span", { class: "auth-dot" + (i < len ? " filled" : "") }));
+  return wrap;
+}
+
+function showAuthScreen(onSuccess) {
+  const auth = loadAuth();
+  if (!auth) {
+    renderPinSetup(onSuccess);
+  } else {
+    renderPinEntry(auth, onSuccess);
+  }
+  document.getElementById("auth-screen").hidden = false;
+}
+
+function renderPinSetup(onSuccess) {
+  const screen = document.getElementById("auth-screen");
+  screen.innerHTML = "";
+  const wrap = el("div", { class: "auth-wrap" });
+  const logo = el("img", { src: "./icon.svg", class: "auth-logo", alt: "" });
+  const title = el("h2", { class: "auth-title" }, "Criar PIN");
+  const hint = el("p", { class: "auth-hint" }, "Escolha um PIN de 4 dígitos para proteger o Fluxo.");
+
+  let pin1 = "", step = 1, currentPin = "";
+  let dotsEl = buildDotDisplay(0);
+
+  const update = () => {
+    const newDots = buildDotDisplay(currentPin.length);
+    dotsEl.replaceWith(newDots);
+    dotsEl = newDots;
+  };
+
+  const onDigit = d => {
+    if (currentPin.length >= 4) return;
+    currentPin += d;
+    update();
+    if (currentPin.length === 4) {
+      setTimeout(() => {
+        if (step === 1) {
+          pin1 = currentPin; currentPin = ""; step = 2;
+          title.textContent = "Confirmar PIN";
+          hint.textContent = "Digite o PIN novamente para confirmar.";
+          hint.className = "auth-hint";
+          update();
+        } else {
+          if (currentPin === pin1) {
+            hashPin(currentPin).then(h => {
+              saveAuth({ pin: h });
+              document.getElementById("auth-screen").hidden = true;
+              onSuccess();
+              if (hasWebAuthn()) offerBiometric();
+            });
+          } else {
+            step = 1; pin1 = ""; currentPin = "";
+            title.textContent = "Criar PIN";
+            hint.textContent = "PINs não coincidem. Tente novamente.";
+            hint.className = "auth-hint auth-hint--error";
+            update();
+          }
+        }
+      }, 120);
+    }
+  };
+  const onDelete = () => { if (currentPin.length > 0) { currentPin = currentPin.slice(0, -1); update(); } };
+
+  wrap.append(logo, title, hint, dotsEl, buildAuthPad(onDigit, onDelete));
+  screen.appendChild(wrap);
+}
+
+function renderPinEntry(auth, onSuccess) {
+  const screen = document.getElementById("auth-screen");
+  screen.innerHTML = "";
+  const wrap = el("div", { class: "auth-wrap" });
+  const logo = el("img", { src: "./icon.svg", class: "auth-logo", alt: "" });
+  const title = el("h2", { class: "auth-title" }, "Bem-vindo");
+  const hint = el("p", { class: "auth-hint" }, "Digite seu PIN para entrar.");
+
+  let currentPin = "";
+  let dotsEl = buildDotDisplay(0);
+  const update = () => { const n = buildDotDisplay(currentPin.length); dotsEl.replaceWith(n); dotsEl = n; };
+
+  const tryBio = auth.webAuthnCredId ? async () => {
+    try {
+      const credIdHex = auth.webAuthnCredId;
+      const credIdBytes = Uint8Array.from(credIdHex.match(/.{2}/g).map(b => parseInt(b, 16)));
+      await navigator.credentials.get({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          rpId: window.location.hostname,
+          allowCredentials: [{ id: credIdBytes, type: "public-key" }],
+          userVerification: "preferred",
+          timeout: 60000,
+        }
+      });
+      document.getElementById("auth-screen").hidden = true;
+      onSuccess();
+    } catch {
+      hint.textContent = "Biometria falhou. Use o PIN.";
+      hint.className = "auth-hint auth-hint--error";
+    }
+  } : null;
+
+  const onDigit = d => {
+    if (currentPin.length >= 4) return;
+    currentPin += d;
+    update();
+    if (currentPin.length === 4) {
+      setTimeout(async () => {
+        const h = await hashPin(currentPin);
+        if (h === auth.pin) {
+          document.getElementById("auth-screen").hidden = true;
+          onSuccess();
+        } else {
+          currentPin = "";
+          hint.textContent = "PIN incorreto. Tente novamente.";
+          hint.className = "auth-hint auth-hint--error";
+          update();
+        }
+      }, 120);
+    }
+  };
+  const onDelete = () => { if (currentPin.length > 0) { currentPin = currentPin.slice(0, -1); update(); } };
+
+  wrap.append(logo, title, hint, dotsEl, buildAuthPad(onDigit, onDelete, tryBio));
+  screen.appendChild(wrap);
+
+  // Auto-trigger biometric on entry
+  if (tryBio) setTimeout(tryBio, 400);
+}
+
+async function offerBiometric() {
+  if (!hasWebAuthn()) return;
+  if (!confirm("Deseja ativar login por biometria (digital/rosto)?")) return;
+  try {
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: "Fluxo", id: window.location.hostname },
+        user: {
+          id: new TextEncoder().encode("fluxo-user"),
+          name: "Usuário",
+          displayName: "Usuário Fluxo",
+        },
+        pubKeyCredParams: [
+          { alg: -7, type: "public-key" },
+          { alg: -257, type: "public-key" },
+        ],
+        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "preferred" },
+        timeout: 60000,
+      }
+    });
+    const credIdHex = Array.from(new Uint8Array(cred.rawId)).map(b => b.toString(16).padStart(2, "0")).join("");
+    const auth = loadAuth();
+    if (auth) { auth.webAuthnCredId = credIdHex; saveAuth(auth); }
+    showToast("Biometria ativada!");
+  } catch {
+    showToast("Biometria não disponível.");
+  }
+}
+
+function showChangePinFlow() {
+  const auth = loadAuth();
+  if (!auth) return;
+  const screen = document.getElementById("auth-screen");
+  screen.innerHTML = "";
+  screen.hidden = false;
+  const wrap = el("div", { class: "auth-wrap" });
+  const logo = el("img", { src: "./icon.svg", class: "auth-logo", alt: "" });
+  const title = el("h2", { class: "auth-title" }, "Verificar PIN atual");
+  const hint = el("p", { class: "auth-hint" }, "Digite o PIN atual para continuar.");
+  const cancelBtn = el("button", { type: "button", class: "auth-link" }, "Cancelar");
+  cancelBtn.addEventListener("click", () => { screen.hidden = true; });
+
+  let step = 1, pinOld = "", pin1 = "", currentPin = "";
+  let dotsEl = buildDotDisplay(0);
+  const update = () => { const n = buildDotDisplay(currentPin.length); dotsEl.replaceWith(n); dotsEl = n; };
+
+  const onDigit = d => {
+    if (currentPin.length >= 4) return;
+    currentPin += d;
+    update();
+    if (currentPin.length === 4) {
+      setTimeout(async () => {
+        if (step === 1) {
+          const h = await hashPin(currentPin);
+          if (h !== auth.pin) {
+            currentPin = ""; hint.textContent = "PIN incorreto."; hint.className = "auth-hint auth-hint--error"; update(); return;
+          }
+          pinOld = currentPin; currentPin = ""; step = 2;
+          title.textContent = "Novo PIN"; hint.textContent = "Escolha um novo PIN de 4 dígitos."; hint.className = "auth-hint"; update();
+        } else if (step === 2) {
+          pin1 = currentPin; currentPin = ""; step = 3;
+          title.textContent = "Confirmar novo PIN"; hint.textContent = "Confirme o novo PIN."; hint.className = "auth-hint"; update();
+        } else {
+          if (currentPin !== pin1) {
+            currentPin = ""; step = 2; pin1 = "";
+            hint.textContent = "PINs não coincidem."; hint.className = "auth-hint auth-hint--error"; update();
+            title.textContent = "Novo PIN"; return;
+          }
+          const h = await hashPin(currentPin);
+          auth.pin = h; saveAuth(auth);
+          screen.hidden = true;
+          showToast("PIN alterado com sucesso!");
+        }
+      }, 120);
+    }
+  };
+  const onDelete = () => { if (currentPin.length > 0) { currentPin = currentPin.slice(0, -1); update(); } };
+
+  wrap.append(logo, title, hint, dotsEl, buildAuthPad(onDigit, onDelete), cancelBtn);
+  screen.appendChild(wrap);
+}
+
 async function registerSW() {
   if (!("serviceWorker" in navigator)) return;
   try {
@@ -2273,12 +2655,7 @@ async function registerSW() {
   } catch {}
 }
 
-async function init() {
-  load();
-  applyTheme();
-  setupUI();
-  setupSpeech();
-  render();
+async function initApp() {
   await registerSW();
   checkDueNotifications();
   scheduleNotifications();
@@ -2293,6 +2670,16 @@ async function init() {
       render();
     }
   });
+}
+
+async function init() {
+  load();
+  applyTheme();
+  setupUI();
+  setupSpeech();
+  render();
+
+  showAuthScreen(() => initApp());
 }
 
 init();

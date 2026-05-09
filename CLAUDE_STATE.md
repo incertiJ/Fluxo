@@ -16,67 +16,71 @@ Combina dois papéis:
 **Branch de deploy**: `claude/fluxo-v2`
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
 **Nomenclatura de branches**: `claude/fluxo-vX.X` (ex: `claude/fluxo-v5.01`)
-**Versão atual**: `5.00`
+**Versão atual**: `5.01`
 
 ---
 
 ## Status Atual
 
-### Implementado em v5.00 (branch claude/fix-mobile-cache-update-z3LsR)
+### Implementado em v5.01 (branch claude/fix-mobile-cache-update-z3LsR)
 
-**Navegação**
-- Aba "Início" renomeada para "Tarefas" (`data-view="home"` mantido internamente)
-- Aba "Calendário" removida
-- Nova aba "Notas" (`data-view="notes"`)
-- Ordem de abas: Tarefas / Compras / Notas
-- `swipeTabs = ["home", "shopping", "notes"]`
-- FAB oculto nas abas Compras e Notas
+**Auth (login)**
+- `fluxo/auth` → `{ pin: sha256hash, webAuthnCredId? }`
+- Primeiro acesso → `renderPinSetup()` (digitação + confirmação)
+- Acessos seguintes → `renderPinEntry()` + auto-trigger biometria se cadastrada
+- WebAuthn: `navigator.credentials.create/get` com `authenticatorAttachment: "platform"`
+- Alterar PIN: Configurações → "Alterar PIN" (exige PIN atual)
+- Logo → settings (sem mudança no behavior do header)
 
 **Aba Tarefas — box filtros+calendário**
-- Box sticky no topo com layout flex horizontal: filtros à esquerda, mini-calendário à direita
-- Linha 1 de filtros: `[⇅ sort]` `[Pontual] [Rotina]` (chips inline de Frequência)
-- Linha 2 de filtros: `[Categoria ▼]` `[Importância ▼]`
-- Filtro "Prazo" removido definitivamente
-- Sort toggle: `state.tasksSortBy = "importance" | "date"` — alterna com botão ⇅
-- Mini-calendário: prev/next mês inline, semana começa domingo
-- Click em dia com tarefas → `day-tasks-modal` centralizado
-- Click em dia sem tarefas → highlight visual (`state.tasksCalDate`)
+- Box `filter-cal-box`: `background: --accent-3`, `border: --accent-2`
+- Layout: filtros à esquerda (40%), mini-calendário à direita (flex:1 = 60%)
+- Filtros: 3 dropdowns empilhados, largura 95% do container esquerdo
+- Ordem dos dropdowns: Importância → Categoria → Frequência
+- Sort removido; Frequência virou dropdown (Pontual/Rotina)
+- Click fora de dropdown usa `capture:true` + `stopPropagation()` + `preventDefault()`
+- Mini-calendário: sempre 35 células (5 linhas × 7)
+- Dot colorido por score, sempre 75% do tamanho da célula (não variable)
+- Número do dia acima do dot (flex-column)
 
 **Aba Tarefas — seções**
-- Startup: só Lembrete expandido (`homeCollapsed: { reminder:false, ...: true }`)
-- "Sem data" removida — itens sem data vão para "Mais tarde"
-- "Mais tarde" ordena: com data primeiro (por data asc), sem data depois (por importância)
-- `state.homeCollapsed` não persiste no localStorage (reseta a cada sessão)
-
-**Badge de versão**
-- Clique abre `changelog-modal` (não mais popover)
-- Lista de novidades da versão atual com checkboxes (salvo em `fluxo/changelog-checks`)
+- Startup: só Lembrete expandido
+- Nova seção "Feitas": tarefas `oneoff` com `completed:true`, colapsada por default
+- `state.homeCollapsed` inclui `done: true`
 
 **Aba Notas**
-- Cadernos (`state.notes.notebooks[]`): `{ id, name, color, collapsed }`
-- Páginas (`state.notes.pages[]`): `{ id, notebookId, name, content, updatedAt }`
-- Cores: mesma paleta `TAG_COLORS` (16 pastéis)
-- Cadernos colapsáveis, click no nome abre `notebook-modal`
-- Click em página → `notes-page-modal` com editor + pré-visualização markdown
-- Markdown: `**negrito**`, `*itálico*`, `# H1`, `## H2`, `### H3`, `- lista`
-- Salvar/deletar página com persistência em `fluxo/v2`
+- Cadernos: click no header expande/colapsa; long press (600ms) no header → `notebook-modal`
+- Sem clique direto no nome para editar
+- Editor: sem botão pré-visualização; sempre no modo edição
+- Barra de ferramentas: `[T]` `[N]` `[I]` `[●Cor]` `[☰ Lista]`
+- `applyMarkdownAction()`: insere markdown no cursor do textarea
+- `applyColorAction()`: insere `<span style="color:#hex">texto</span>`
+- Textarea com linhas de caderno via `repeating-linear-gradient`
 
 **Compras**
-- Click em qualquer parte do header da categoria expande/recolhe (já existia, confirmado)
-- Long press em item (550ms) → row substitui para: `[color-dot][name-input][OK btn]`
-- Click no color-dot → abre `cat-modal` para editar cor da categoria
-- Itens coloridos com tint da categoria: `--cat-tint` a 7% de opacidade
-- `--cat-tint` aplicado via `row.style.background`
+- Header da categoria: click → expande/colapsa; long press (600ms) → `openCategoryModal`
+- Nome do item: click → edição inline (substitui span por input; blur/Enter salva)
+- Cor do texto do item = `cat.color` (não mais tint de background)
+- Background dos itens = background padrão da box (sem `--cat-tint`)
 
-**Gesto back (borda direita)**
-- Swipe iniciando nos últimos 15% da largura → `closeLastModal()`
-- Nenhum modal aberto → toast "Deseja sair do Fluxo?"
-- Modal priority order: tag-edit → tags → modal → renew → quick-date → tag-select → cat → add-item → cat-picker → settings → notes-page → notebook → day-tasks → changelog
+**Subtarefas**
+- Click no texto da subtarefa → inline edit (input substitui span; Enter/blur salva)
 
 **Fog de swipe**
-- `<div id="swipe-fog">` fixo, `pointer-events:none`, z-index:99
-- `opacity = min(|dx|/150, 1) × 0.15`, gradiente para o lado de destino
-- Cor: `var(--accent)`, sem fog se swipe da borda direita
+- `opacity = min(|dx|/120, 1) × 0.35`, transição `0.25s ease-out`
+
+**Notificações — bugs corrigidos**
+- `buildScheduledNotifications(lookbackMs)`: inclui notifs dos últimas X ms (default 0)
+- `checkDueNotifications()`: usa `lookbackMs = 24h` — notifs perdidas são mostradas ao abrir
+- `scheduleNotifications()`: usa `navigator.serviceWorker.ready` (mais robusto que `.controller`)
+- `nextOccurrenceOfTime()`: se `addDays=0` e hora passou, avança para amanhã
+- SW: persiste `scheduledItems` em Cache API `"fluxo-notif"` — sobrevive restart do SW
+
+**v5.00** (mantido para referência):
+- Aba "Tarefas" (renomeada de Início); sem aba Calendário
+- Mini-calendário embutido nos filtros
+- Aba Notas; Markdown básico
+- Gesto back; Fog; Badge de versão/changelog
 
 **Persistência**
 - `save()`/`load()` incluem `state.notes`

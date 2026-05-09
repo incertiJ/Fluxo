@@ -29,7 +29,7 @@ const CHANGELOG = {
     "Aba Calendário removida — mini-calendário embutido na aba Tarefas",
     "Filtros reorganizados: Frequência + Importância + Categoria com ícone de ordenação",
     "Ordenação por importância ou data (botão ⇅ nos filtros)",
-    "Seção “Sem data” removida — itens aparecem em “Mais tarde”",
+    "Seção 'Sem data' removida — itens aparecem em 'Mais tarde'",
     "Somente Lembretes expandido ao iniciar o app",
     "Click no dia do calendário com tarefas abre modal centralizado",
     "Nova aba Notas com cadernos, páginas e markdown leve",
@@ -287,7 +287,7 @@ function render() {
     requestAnimationFrame(() => { view.style.animation = ""; });
   }
 
-  fab.hidden = (state.view === "shopping" || state.view === "notes");
+  fab.hidden = false;
 
   if (state.view === "home") renderHome(view);
   else if (state.view === "shopping") renderShopping(view);
@@ -356,55 +356,8 @@ function makeFilterDropdown(openObj, key, label, buildBody) {
 }
 
 function buildFilterPanel() {
-  const hf = state.homeFilters;
-  const fo = state.homeFilterOpen;
   const panel = el("div", { class: "filter-cal-box" });
-
-  // Left: 3 dropdowns stacked (Importância, Categoria, Frequência)
-  const left = el("div", { class: "filter-left" });
-
-  left.appendChild(makeFilterDropdown(fo, "imp", "Importância", body => {
-    [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
-      const chip = el("button", { type: "button", class: "filter-chip" + (hf.imps.has(v) ? " active" : "") }, lbl);
-      chip.addEventListener("click", () => {
-        if (hf.imps.has(v)) hf.imps.delete(v); else hf.imps.add(v);
-        chip.classList.toggle("active", hf.imps.has(v));
-        render();
-      });
-      body.appendChild(chip);
-    });
-  }));
-
-  left.appendChild(makeFilterDropdown(fo, "tag", "Categoria", body => {
-    state.tags.forEach(tag => {
-      const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (hf.tagIds.has(tag.id) ? " active" : "") }, tag.name);
-      chip.style.setProperty("--chip-color", tag.color);
-      chip.addEventListener("click", () => {
-        if (hf.tagIds.has(tag.id)) hf.tagIds.delete(tag.id); else hf.tagIds.add(tag.id);
-        chip.classList.toggle("active", hf.tagIds.has(tag.id));
-        render();
-      });
-      body.appendChild(chip);
-    });
-  }));
-
-  left.appendChild(makeFilterDropdown(fo, "freq", "Frequência", body => {
-    [["oneoff", "Pontual"], ["routine", "Rotina"]].forEach(([v, lbl]) => {
-      const chip = el("button", { type: "button", class: "filter-chip" + (hf.types.has(v) ? " active" : "") }, lbl);
-      chip.addEventListener("click", () => {
-        if (hf.types.has(v)) hf.types.delete(v); else hf.types.add(v);
-        chip.classList.toggle("active", hf.types.has(v));
-        render();
-      });
-      body.appendChild(chip);
-    });
-  }));
-
-  panel.appendChild(left);
-
-  // Right: mini calendar (takes remaining 60%)
   panel.appendChild(buildMiniCalendar());
-
   return panel;
 }
 
@@ -462,7 +415,6 @@ function makeMiniCalCell(y, m, d, outside) {
   const date = new Date(y, m, d);
   const ds = ymd(date);
   const tasks = tasksOnDate(ds);
-  const score = tasks.reduce((s, t) => s + scoreFor(t), 0);
   const isSelected = ds === state.tasksCalDate;
   const isToday = ds === todayISO();
 
@@ -474,11 +426,12 @@ function makeMiniCalCell(y, m, d, outside) {
   });
   cell.appendChild(el("span", { class: "mini-cal-day-num" }, String(date.getDate())));
 
-  if (score > 0) {
-    const dot = el("span", { class: "mini-cal-day-dot" });
-    const style = scoreDotStyle(score);
-    dot.style.background = style ? style.color : "var(--accent)";
-    cell.appendChild(dot);
+  if (tasks.length) {
+    const dotsRow = el("div", { class: "mini-cal-day-dots" });
+    tasks.slice(0, 5).forEach(t => {
+      dotsRow.appendChild(el("span", { class: "mini-cal-dot", "data-imp": String(t.importance) }));
+    });
+    cell.appendChild(dotsRow);
   }
 
   cell.addEventListener("click", () => {
@@ -564,13 +517,16 @@ function renderHome(root) {
   scroll.appendChild(makeHomeSection("today", "Para hoje", todayTasks, "Nenhuma tarefa para hoje."));
   scroll.appendChild(makeHomeSection("nextweek", "Próxima semana", nextweek, "Nenhuma tarefa para a semana."));
   scroll.appendChild(makeHomeSection("later", "Mais tarde", later, "Nenhuma tarefa além desta semana."));
-  scroll.appendChild(makeHomeSection("done", "Feitas", done, "Nenhuma tarefa concluída."));
+  scroll.appendChild(makeHomeSection("done", "Feitas", done, "Nenhuma tarefa concluída.", { showDelete: true }));
   root.appendChild(scroll);
 }
 
-function makeHomeSection(key, title, tasks, emptyMsg) {
+function makeHomeSection(key, title, tasks, emptyMsg, opts = {}) {
   const collapsed = state.homeCollapsed[key];
-  const sec = el("section", { class: "section section--home" + (collapsed ? " section--collapsed" : "") });
+  const sec = el("section", {
+    class: "section section--home" + (collapsed ? " section--collapsed" : ""),
+    "data-section": key
+  });
 
   const hdr = el("div", { class: "section-hdr" });
   const h2 = el("h2", {}, title);
@@ -579,8 +535,19 @@ function makeHomeSection(key, title, tasks, emptyMsg) {
   hdr.appendChild(el("span", { class: "section-toggle" }, collapsed ? "▶" : "▼"));
 
   hdr.addEventListener("click", () => {
-    state.homeCollapsed[key] = !state.homeCollapsed[key];
+    const wasCollapsed = state.homeCollapsed[key];
+    state.homeCollapsed[key] = !wasCollapsed;
+    const scrollEl = document.querySelector(".home-scroll");
+    const savedTop = scrollEl ? scrollEl.scrollTop : 0;
     render();
+    const newScrollEl = document.querySelector(".home-scroll");
+    if (newScrollEl) {
+      newScrollEl.scrollTop = savedTop;
+      if (wasCollapsed) {
+        const newHdr = document.querySelector(`[data-section="${key}"] .section-hdr`);
+        if (newHdr) newHdr.scrollIntoView({ block: "nearest", behavior: "instant" });
+      }
+    }
   });
 
   sec.appendChild(hdr);
@@ -590,7 +557,7 @@ function makeHomeSection(key, title, tasks, emptyMsg) {
       sec.appendChild(el("div", { class: "empty" }, emptyMsg));
     } else {
       const list = el("div", { class: "task-list" });
-      tasks.forEach(t => list.appendChild(renderTaskCard(t)));
+      tasks.forEach(t => list.appendChild(renderTaskCard(t, opts)));
       sec.appendChild(list);
     }
   }
@@ -610,7 +577,7 @@ function unitShort(u, n) {
   return n === 1 ? s : p;
 }
 
-function renderTaskCard(t) {
+function renderTaskCard(t, opts = {}) {
   const card = el("article", {
     class: "task" + (t.completed ? " completed" : ""),
     "data-imp": t.importance,
@@ -647,7 +614,7 @@ function renderTaskCard(t) {
 
   const footer = el("div", { class: "task-footer" });
   const freqIcon = el("button", { type: "button", class: "freq-icon", "aria-label": "Frequência" });
-  freqIcon.textContent = t.type === "routine" ? "↻" : "⚑";
+  freqIcon.textContent = t.type === "routine" ? "↻" : "⤓";
   freqIcon.addEventListener("click", e => {
     e.stopPropagation();
     const msg = t.type === "routine"
@@ -673,6 +640,20 @@ function renderTaskCard(t) {
 
   card.append(cb, content, corner, footer);
   card.addEventListener("click", () => openTaskModal(t.id));
+
+  if (opts.showDelete) {
+    const delBtn = el("button", { type: "button", class: "task-delete-perm-btn", title: "Remover definitivamente" }, "✕");
+    delBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      if (confirm("Remover esta tarefa definitivamente?")) {
+        state.tasks = state.tasks.filter(t2 => t2.id !== t.id);
+        save();
+        render();
+      }
+    });
+    card.appendChild(delBtn);
+  }
+
   return card;
 }
 
@@ -682,14 +663,8 @@ function renderShopping(root) {
   root.className = "view view--scrollable";
   const cats = state.shopping.categories;
 
-  const toolbar = el("div", { class: "shopping-toolbar" });
-  const addBtn = el("button", { type: "button", class: "primary-btn shopping-add-btn" }, "+ Adicionar item");
-  addBtn.addEventListener("click", openAddItemModal);
-  toolbar.appendChild(addBtn);
-  root.appendChild(toolbar);
-
   if (!cats.length) {
-    root.appendChild(el("div", { class: "empty" }, "Nenhum item ainda. Toque em “+ Adicionar item” para começar."));
+    root.appendChild(el("div", { class: "empty" }, "Nenhuma categoria ainda. Toque em + para adicionar um item."));
     return;
   }
   const sorted = [...cats].sort((a, b) => b.items.length - a.items.length);
@@ -967,12 +942,6 @@ function renderNotes(root) {
   root.className = "view view--scrollable";
   const notebooks = state.notes.notebooks;
 
-  const toolbar = el("div", { class: "shopping-toolbar" });
-  const addBtn = el("button", { type: "button", class: "primary-btn shopping-add-btn" }, "+ Novo caderno");
-  addBtn.addEventListener("click", () => openNotebookModal(null));
-  toolbar.appendChild(addBtn);
-  root.appendChild(toolbar);
-
   if (!notebooks.length) {
     root.appendChild(el("div", { class: "empty" }, "Nenhum caderno ainda. Crie um para começar."));
     return;
@@ -1093,7 +1062,8 @@ function openNotePage(pageId, notebookId = null) {
   state.editingPageId = pageId;
   const page = pageId ? state.notes.pages.find(p => p.id === pageId) : null;
   document.getElementById("page-title-input").value = page?.name || "";
-  document.getElementById("page-content-input").value = page?.content || "";
+  const editor = document.getElementById("page-content-input");
+  editor.innerHTML = page?.content || "";
   document.getElementById("notes-page-modal").dataset.notebookId = notebookId || page?.notebookId || "";
   document.getElementById("notes-page-modal").hidden = false;
   // Close color picker if open
@@ -1110,7 +1080,7 @@ function closeNotePage() {
 
 function saveNotePage() {
   const name = document.getElementById("page-title-input").value.trim() || "Sem título";
-  const content = document.getElementById("page-content-input").value;
+  const content = document.getElementById("page-content-input").innerHTML;
   const notebookId = document.getElementById("notes-page-modal").dataset.notebookId;
 
   if (state.editingPageId) {
@@ -1163,80 +1133,58 @@ function renderMarkdown(text) {
 
 /* ===== Notes page toolbar ===== */
 
+const EDITOR_COLORS = [
+  { hex: "#ffffff", label: "Padrão" },
+  { hex: "#e53935", label: "Vermelho" },
+  { hex: "#43a047", label: "Verde" },
+  { hex: "#1e88e5", label: "Azul" },
+  { hex: "#fdd835", label: "Amarelo" },
+];
+
 function setupPageToolbar() {
   const toolbar = document.querySelector(".page-toolbar");
   if (!toolbar) return;
   const picker = toolbar.querySelector(".page-tool-color-picker");
 
-  // Build color swatches
-  TAG_COLORS.forEach(c => {
-    const b = el("button", { type: "button", class: "page-tool-color-swatch" });
-    b.style.background = c;
-    b.addEventListener("click", () => {
-      applyColorAction(document.getElementById("page-content-input"), c);
+  // 5 color swatches — mousedown keeps focus in contenteditable
+  EDITOR_COLORS.forEach(({ hex, label }) => {
+    const b = el("button", { type: "button", class: "page-tool-color-swatch", title: label });
+    b.style.background = hex;
+    if (hex === "#ffffff") b.classList.add("page-tool-color-swatch--default");
+    b.addEventListener("mousedown", e => {
+      e.preventDefault();
+      document.execCommand("foreColor", false, hex);
       picker.hidden = true;
-      document.getElementById("page-content-input").focus();
     });
     picker.appendChild(b);
   });
 
-  toolbar.addEventListener("click", e => {
-    const btn = e.target.closest("[data-action]");
-    if (!btn) {
-      // Click outside any button within toolbar — close color picker
-      if (!picker.contains(e.target)) picker.hidden = true;
-      return;
-    }
-    const action = btn.dataset.action;
-    if (action === "color") {
-      picker.hidden = !picker.hidden;
-      return;
-    }
-    picker.hidden = true;
-    applyMarkdownAction(document.getElementById("page-content-input"), action);
-    document.getElementById("page-content-input").focus();
+  toolbar.querySelectorAll("[data-action]").forEach(btn => {
+    btn.addEventListener("mousedown", e => {
+      e.preventDefault();
+      const action = btn.dataset.action;
+      if (action === "color") {
+        picker.hidden = !picker.hidden;
+        return;
+      }
+      picker.hidden = true;
+      switch (action) {
+        case "bold": document.execCommand("bold"); break;
+        case "italic": document.execCommand("italic"); break;
+        case "title": {
+          const block = document.queryCommandValue("formatBlock").toLowerCase();
+          document.execCommand("formatBlock", false, block === "h1" ? "p" : "h1");
+          break;
+        }
+        case "list": document.execCommand("insertUnorderedList"); break;
+      }
+    });
   });
 
-  // Close picker when clicking outside toolbar
-  document.addEventListener("click", e => {
+  // Close picker on click outside toolbar
+  document.addEventListener("mousedown", e => {
     if (!toolbar.contains(e.target)) picker.hidden = true;
   });
-}
-
-function applyMarkdownAction(ta, action) {
-  const start = ta.selectionStart;
-  const end = ta.selectionEnd;
-  const text = ta.value;
-  const selected = text.slice(start, end);
-
-  if (action === "title" || action === "list") {
-    const prefix = action === "title" ? "# " : "- ";
-    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
-    const lineEnd = text.indexOf("\n", start);
-    const line = text.slice(lineStart, lineEnd === -1 ? undefined : lineEnd);
-    const hasMd = line.startsWith(prefix);
-    const newLine = hasMd ? line.slice(prefix.length) : prefix + line;
-    const after = lineEnd === -1 ? "" : text.slice(lineEnd);
-    ta.value = text.slice(0, lineStart) + newLine + after;
-    const pos = lineStart + newLine.length;
-    ta.setSelectionRange(pos, pos);
-    return;
-  }
-
-  const wrap = action === "bold" ? "**" : "*";
-  const insertion = wrap + (selected || "") + wrap;
-  ta.value = text.slice(0, start) + insertion + text.slice(end);
-  ta.setSelectionRange(start + wrap.length, start + wrap.length + (selected || "").length);
-}
-
-function applyColorAction(ta, color) {
-  const start = ta.selectionStart;
-  const end = ta.selectionEnd;
-  const text = ta.value;
-  const selected = text.slice(start, end) || "texto";
-  const insertion = `<span style="color:${color}">${selected}</span>`;
-  ta.value = text.slice(0, start) + insertion + text.slice(end);
-  ta.setSelectionRange(start, start + insertion.length);
 }
 
 /* ===== Animations ===== */
@@ -2105,9 +2053,17 @@ function renderSettingsBody() {
   const testBtn = el("button", { type: "button", class: "ghost-btn", style: "margin-top:8px;width:100%" }, "Testar notificação agora");
   testBtn.addEventListener("click", async () => {
     if (!(await ensureNotif())) { showToast("Permissão negada"); return; }
-    try { new Notification("Fluxo — Teste", { body: "Notificações estão funcionando!", icon: "./icon.svg", tag: "test-" + Date.now() }); }
-    catch { showToast("Erro ao enviar"); return; }
-    showToast("Notificação enviada");
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification("Fluxo — Teste", {
+        body: "Notificações estão funcionando!",
+        icon: "./icon.svg",
+        tag: "test-" + Date.now()
+      });
+      showToast("Notificação enviada");
+    } catch (err) {
+      showToast("Erro: " + (err?.message || "desconhecido"));
+    }
   });
   notifField.appendChild(testBtn);
   body.appendChild(notifField);
@@ -2199,7 +2155,11 @@ function setupUI() {
 
   document.querySelectorAll(".tab").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
 
-  document.getElementById("add-btn").addEventListener("click", () => openTaskModal());
+  document.getElementById("add-btn").addEventListener("click", () => {
+    if (state.view === "shopping") openAddItemModal();
+    else if (state.view === "notes") openNotebookModal(null);
+    else openTaskModal();
+  });
   document.getElementById("close-modal").addEventListener("click", closeTaskModal);
   document.getElementById("modal").addEventListener("click", e => {
     if (e.target.id === "modal") closeTaskModal();
@@ -2659,6 +2619,20 @@ async function initApp() {
   await registerSW();
   checkDueNotifications();
   scheduleNotifications();
+
+  // Intercept system back gesture (Android) to close modals or confirm exit
+  history.pushState({ fluxo: true }, "");
+  window.addEventListener("popstate", () => {
+    if (closeLastModal()) {
+      history.pushState({ fluxo: true }, "");
+    } else {
+      if (confirm("Deseja sair do Fluxo?")) {
+        // Let browser navigate back naturally (closes PWA)
+      } else {
+        history.pushState({ fluxo: true }, "");
+      }
+    }
+  });
   setInterval(() => {
     checkDueNotifications();
     if (state.view === "home") render();

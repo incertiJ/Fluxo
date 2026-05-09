@@ -1,12 +1,36 @@
-/* Fluxo v6.02 */
+/* Fluxo v6.03 */
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.02";
+const APP_VERSION = "6.03";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "6.03": [
+    "Tarefas: calendário em container colapsável próprio, expandido por padrão",
+    "Tarefas: painel de filtros removido definitivamente",
+    "Tarefas: deslize para deletar tarefa feita não dispara mais troca de aba",
+    "Tarefas: vermelho do deslize e botão 'Apagar todas' em cor pastel da paleta",
+    "Tarefas: botão 'Apagar todas' posicionado próximo à última tarefa",
+    "Tarefas: cor dos títulos de seção (Lembretes, Hoje, etc.) atualizada",
+    "Notas: painel de cores agora oculto por padrão e fecha ao selecionar cor",
+    "Notas: texto posicionado 1px acima da linha do caderno",
+    "Notas: botão Desfazer (↩) adicionado à barra de ferramentas",
+    "Notas: botão Salvar não persiste mais ao navegar sem salvar",
+    "Notificações: ícone do Fluxo exibido nas notificações",
+  ],
+  "6.02": [
+    "Calendário: deslize vertical muda o mês (↑ próximo, ↓ anterior); horizontal troca abas",
+    "Calendário: células compactas (~60% menos altura), dots de importância proporcionais",
+    "Notas: painel de cores com posição fixa — não some ao abrir o teclado",
+    "Notas: cor do botão '● Cor' reflete a cor selecionada",
+    "Notas: texto reposicionado acima da linha do caderno (baseline acima da régua)",
+    "Notas: contagem corrigida — palavras reais + estimativa de linhas no card da página",
+    "Notas: botão Salvar removido do cabeçalho; único salvar é o FAB no canto inferior direito",
+    "Tarefas feitas: deslize para esquerda deleta com animação + Desfazer (3s)",
+    "Tarefas feitas: botão 'Apagar todas' aparece ao chegar ao fim da lista",
+  ],
   "6.01": [
     "Calendário ocupa 100% da caixa de filtros; bolinhas por tarefa (cor/tamanho = importância)",
     "Editor de notas WYSIWYG: negrito/itálico/título/lista via execCommand, sem markdown",
@@ -91,10 +115,9 @@ const state = {
   editingTagDraft: null,
   editingDateTaskId: null,
   editingTagsTaskId: null,
-  homeCollapsed: { reminder: false, atrasadas: true, today: true, nextweek: true, later: true, done: true },
+  homeCollapsed: { calendar: false, reminder: false, atrasadas: true, today: true, nextweek: true, later: true, done: true },
   homeFilters: { types: new Set(), imps: new Set(), tagIds: new Set() },
   homeFilterOpen: { imp: false, tag: false, freq: false },
-  tasksSortBy: "importance",
   editingCategoryId: null,
   editingCategoryDraft: null,
   addItemDraft: { name: "", categoryId: null },
@@ -279,6 +302,13 @@ function setView(v) {
 }
 
 function render() {
+  // Hide page-save-fab whenever the page modal is not visible
+  const noteModal = document.getElementById("notes-page-modal");
+  if (noteModal && noteModal.hidden) {
+    const pageFab = document.getElementById("page-save-fab");
+    if (pageFab) pageFab.style.display = "none";
+  }
+
   const view = document.getElementById("view");
   const fab = document.getElementById("add-btn");
 
@@ -362,10 +392,27 @@ function makeFilterDropdown(openObj, key, label, buildBody) {
   return wrap;
 }
 
-function buildFilterPanel() {
-  const panel = el("div", { class: "filter-cal-box" });
-  panel.appendChild(buildMiniCalendar());
-  return panel;
+function buildCalendarSection() {
+  const key = "calendar";
+  const collapsed = state.homeCollapsed[key];
+  const sec = el("section", {
+    class: "section section--home" + (collapsed ? " section--collapsed" : ""),
+    "data-section": key
+  });
+  const hdr = el("div", { class: "section-hdr" });
+  hdr.appendChild(el("h2", {}, "Calendário"));
+  hdr.appendChild(el("span", { class: "section-toggle" }, collapsed ? "▶" : "▼"));
+  hdr.addEventListener("click", () => {
+    state.homeCollapsed[key] = !state.homeCollapsed[key];
+    render();
+  });
+  sec.appendChild(hdr);
+  if (!collapsed) {
+    const body = el("div", { class: "cal-section-body" });
+    body.appendChild(buildMiniCalendar());
+    sec.appendChild(body);
+  }
+  return sec;
 }
 
 function buildMiniCalendar() {
@@ -493,8 +540,8 @@ function renderHome(root) {
   const in7 = ymd(new Date(Date.now() + 7 * 86400000));
   const hf = state.homeFilters;
 
-  // Filter + calendar box
-  root.appendChild(buildFilterPanel());
+  // Collapsible calendar section
+  root.appendChild(buildCalendarSection());
 
   // Scrollable sections container
   const scroll = el("div", { class: "home-scroll" });
@@ -510,7 +557,7 @@ function renderHome(root) {
 
   const byImp = (a, b) => b.importance - a.importance;
   const byDueThenImp = (a, b) => (taskDue(a) || "").localeCompare(taskDue(b) || "") || b.importance - a.importance;
-  const sortFn = state.tasksSortBy === "date" ? byDueThenImp : byImp;
+  const sortFn = byImp;
 
   const reminder = state.tasks.filter(t =>
     isVisible(t) && t.type === "oneoff" && t.importance >= 3 &&
@@ -1384,6 +1431,7 @@ function setupPageToolbar() {
           break;
         }
         case "list": document.execCommand("insertUnorderedList"); break;
+        case "undo": document.execCommand("undo"); break;
       }
     });
     // touch support for non-color buttons
@@ -1402,6 +1450,7 @@ function setupPageToolbar() {
             break;
           }
           case "list": document.execCommand("insertUnorderedList"); break;
+          case "undo": document.execCommand("undo"); break;
         }
       });
     } else {
@@ -2176,13 +2225,41 @@ function buildDigestItem(triggerMs, kind, h = null, m = null) {
   };
 }
 
+let _notifIconUrl = "./icon.svg";
+
+async function generateNotifIconPng() {
+  const cached = localStorage.getItem("fluxo/icon-png");
+  if (cached) { _notifIconUrl = cached; return; }
+  try {
+    const res = await fetch("./icon.svg");
+    const svg = await res.text();
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const objUrl = URL.createObjectURL(blob);
+    await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = 192; canvas.height = 192;
+        canvas.getContext("2d").drawImage(img, 0, 0, 192, 192);
+        URL.revokeObjectURL(objUrl);
+        const dataUrl = canvas.toDataURL("image/png");
+        try { localStorage.setItem("fluxo/icon-png", dataUrl); } catch {}
+        _notifIconUrl = dataUrl;
+        resolve();
+      };
+      img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(); };
+      img.src = objUrl;
+    });
+  } catch {}
+}
+
 async function scheduleNotifications() {
   if (!(await ensureNotif())) return;
   if (!("serviceWorker" in navigator)) return;
   try {
     const reg = await navigator.serviceWorker.ready;
     const ctrl = navigator.serviceWorker.controller || reg.active;
-    if (ctrl) ctrl.postMessage({ type: "schedule", items: buildScheduledNotifications() });
+    if (ctrl) ctrl.postMessage({ type: "schedule", items: buildScheduledNotifications(), icon: _notifIconUrl });
   } catch {}
 }
 
@@ -2538,13 +2615,14 @@ function setupUI() {
 
   // Swipe to change tabs (edge detection removed — back gesture handled by popstate)
   const swipeTabs = ["home", "shopping", "notes"];
-  let touchStartX = 0, touchStartY = 0;
+  let touchStartX = 0, touchStartY = 0, touchStartInDoneCard = false;
   const viewEl = document.getElementById("view");
   const fogEl = document.getElementById("swipe-fog");
 
   viewEl.addEventListener("touchstart", e => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
+    touchStartInDoneCard = !!e.target.closest(".swipe-delete-wrap");
   }, { passive: true });
 
   viewEl.addEventListener("touchmove", e => {
@@ -2562,6 +2640,7 @@ function setupUI() {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
+    if (touchStartInDoneCard && dx < 0) return; // swipe-to-delete started here — don't change tab
     const cur = swipeTabs.indexOf(state.view);
     if (dx < 0 && cur < swipeTabs.length - 1) setView(swipeTabs[cur + 1]);
     if (dx > 0 && cur > 0) setView(swipeTabs[cur - 1]);
@@ -2848,6 +2927,7 @@ async function registerSW() {
 
 async function initApp() {
   await registerSW();
+  generateNotifIconPng(); // async — runs in background, updates _notifIconUrl when ready
   checkDueNotifications();
   scheduleNotifications();
 

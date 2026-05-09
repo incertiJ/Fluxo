@@ -318,7 +318,7 @@ input[type="radio"]:checked::after {
   font-size: 0.85rem;
   margin: 0;
   padding: 12px 14px;
-  color: var(--text-dim);
+  color: var(--text);
   text-transform: uppercase;
   letter-spacing: 0.6px;
   font-weight: 600;
@@ -1452,64 +1452,9 @@ input[type="radio"]:checked::after {
   padding-bottom: 80px;
 }
 
-.filter-cal-box {
-  display: flex;
-  gap: 10px;
-  background: var(--accent-3);
-  border: 1px solid var(--accent-2);
-  border-radius: var(--radius);
-  padding: 10px 12px;
-  box-shadow: var(--shadow);
-  flex-shrink: 0;
-  align-items: flex-start;
-}
-
-.filter-left {
-  width: 40%;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.filter-left .filter-dropdown {
-  width: 95%;
-}
-
-.filter-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.sort-btn {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  font-size: 1rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-family: inherit;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.sort-btn:hover { background: var(--surface-3); }
-.sort-btn.active {
-  background: var(--accent-3);
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.filter-chips-inline {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+/* Calendar section body */
+.cal-section-body {
+  padding: 8px 10px 10px;
 }
 
 .filter-chip-inline {
@@ -1914,7 +1859,6 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
 
 .page-tool-color-picker {
   position: fixed;
-  display: grid;
   grid-template-columns: repeat(5, 28px);
   gap: 4px;
   padding: 8px;
@@ -1924,6 +1868,7 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
   box-shadow: var(--shadow-strong);
   z-index: 250;
 }
+.page-tool-color-picker:not([hidden]) { display: grid; }
 
 .page-tool-color-swatch {
   width: 28px;
@@ -1939,7 +1884,7 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
 
 /* Notebook lines — baseline sits ~3px above each ruling line */
 /* With line-height:2em (32px) and typical sans-serif metrics:
-   baseline ≈ padding-top + 21px; line at 31px → padding-top ≈ 7px gives ~3px gap */
+   baseline ≈ padding-top + 21px; line at 31px → padding-top ≈ 9px gives ~1px gap */
 .page-textarea {
   background-image: repeating-linear-gradient(
     to bottom,
@@ -1951,7 +1896,7 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
   background-size: 100% 2em;
   background-attachment: local;
   line-height: 2em;
-  padding-top: 7px;
+  padding-top: 9px;
 }
 
 /* ===== Notes page save FAB ===== */
@@ -2125,7 +2070,7 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
 .swipe-delete-bg {
   position: absolute;
   inset: 0;
-  background: #e53935;
+  background: var(--imp-crit);
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -2180,11 +2125,11 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
 .delete-all-btn {
   display: block;
   width: calc(100% - 32px);
-  margin: 8px 16px 4px;
-  padding: 10px;
+  margin: 2px 16px 8px;
+  padding: 9px;
   background: transparent;
-  border: 1.5px solid #e53935;
-  color: #e53935;
+  border: 1.5px solid var(--imp-crit);
+  color: var(--imp-crit);
   border-radius: 10px;
   font-size: 0.95rem;
   font-weight: 600;
@@ -2192,7 +2137,7 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
   cursor: pointer;
   transition: background 0.12s;
 }
-.delete-all-btn:hover { background: rgba(229,57,53,0.08); }
+.delete-all-btn:hover { background: var(--imp-crit-tint); }
 .delete-all-btn[hidden] { display: none; }
 
 .done-list-sentinel { height: 1px; }

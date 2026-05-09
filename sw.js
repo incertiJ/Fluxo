@@ -1,4 +1,4 @@
-const CACHE = "fluxo-v11";
+const CACHE = "fluxo-v12";
 const NOTIF_CACHE = "fluxo-notif";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js",
@@ -7,6 +7,7 @@ const ASSETS = [
 
 const timers = new Map();
 let scheduledItems = [];
+let notifIcon = "./icon.svg";
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -63,6 +64,7 @@ self.addEventListener("message", e => {
   if (data.type === "SKIP_WAITING") { self.skipWaiting(); return; }
   if (data.type === "schedule") {
     scheduledItems = data.items || [];
+    if (data.icon) notifIcon = data.icon;
     persistItems(scheduledItems);
     // Show any items that are already past-due immediately
     const now = Date.now();
@@ -71,8 +73,8 @@ self.addEventListener("message", e => {
         self.registration.showNotification(item.title, {
           body: item.body,
           tag: item.id,
-          icon: "./icon.svg",
-          badge: "./icon.svg",
+          icon: notifIcon,
+          badge: notifIcon,
         }).catch(() => {});
       }
     }
@@ -91,8 +93,8 @@ function rescheduleAll(items) {
       self.registration.showNotification(item.title, {
         body: item.body,
         tag: item.id,
-        icon: "./icon.svg",
-        badge: "./icon.svg",
+        icon: notifIcon,
+        badge: notifIcon,
       });
       timers.delete(item.id);
     }, delay);

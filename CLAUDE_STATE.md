@@ -16,7 +16,7 @@ Combina dois papéis:
 **Branch de trabalho atual**: `claude/fix-mobile-cache-update-z3LsR`
 **Branch de deploy**: `claude/fluxo-v2`
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
-**Versão atual**: `6.02`
+**Versão atual**: `6.03`
 
 > **REGRA DE VERSÃO**: TODA MODIFICAÇÃO NO CÓDIGO incrementa a versão. +0.01 para bugfix/ajuste (pode fazer sem perguntar). +1.00 (reset decimal) para nova funcionalidade ou refactor significativo — **sempre perguntar ao usuário antes de fazer bump +1.00**.
 

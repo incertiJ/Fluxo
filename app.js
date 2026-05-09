@@ -2435,7 +2435,7 @@ function showAuthScreen(onSuccess) {
   } else {
     renderPinEntry(auth, onSuccess);
   }
-  document.getElementById("auth-screen").hidden = false;
+  document.getElementById("auth-screen").style.display = "flex";
 }
 
 function renderPinSetup(onSuccess) {
@@ -2471,7 +2471,7 @@ function renderPinSetup(onSuccess) {
           if (currentPin === pin1) {
             hashPin(currentPin).then(h => {
               saveAuth({ pin: h });
-              document.getElementById("auth-screen").hidden = true;
+              document.getElementById("auth-screen").style.display = "none";
               onSuccess();
               if (hasWebAuthn()) offerBiometric();
             });
@@ -2517,7 +2517,7 @@ function renderPinEntry(auth, onSuccess) {
           timeout: 60000,
         }
       });
-      document.getElementById("auth-screen").hidden = true;
+      document.getElementById("auth-screen").style.display = "none";
       onSuccess();
     } catch {
       hint.textContent = "Biometria falhou. Use o PIN.";
@@ -2533,7 +2533,7 @@ function renderPinEntry(auth, onSuccess) {
       setTimeout(async () => {
         const h = await hashPin(currentPin);
         if (h === auth.pin) {
-          document.getElementById("auth-screen").hidden = true;
+          document.getElementById("auth-screen").style.display = "none";
           onSuccess();
         } else {
           currentPin = "";
@@ -2588,13 +2588,13 @@ function showChangePinFlow() {
   if (!auth) return;
   const screen = document.getElementById("auth-screen");
   screen.innerHTML = "";
-  screen.hidden = false;
+  screen.style.display = "flex";
   const wrap = el("div", { class: "auth-wrap" });
   const logo = el("img", { src: "./icon.svg", class: "auth-logo", alt: "" });
   const title = el("h2", { class: "auth-title" }, "Verificar PIN atual");
   const hint = el("p", { class: "auth-hint" }, "Digite o PIN atual para continuar.");
   const cancelBtn = el("button", { type: "button", class: "auth-link" }, "Cancelar");
-  cancelBtn.addEventListener("click", () => { screen.hidden = true; });
+  cancelBtn.addEventListener("click", () => { screen.style.display = "none"; });
 
   let step = 1, pinOld = "", pin1 = "", currentPin = "";
   let dotsEl = buildDotDisplay(0);
@@ -2624,7 +2624,7 @@ function showChangePinFlow() {
           }
           const h = await hashPin(currentPin);
           auth.pin = h; saveAuth(auth);
-          screen.hidden = true;
+          screen.style.display = "none";
           showToast("PIN alterado com sucesso!");
         }
       }, 120);

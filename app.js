@@ -1,9 +1,9 @@
-/* Fluxo v6.01 */
+/* Fluxo v6.02 */
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.01";
+const APP_VERSION = "6.02";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
@@ -418,13 +418,19 @@ function buildMiniCalendar() {
 
   wrap.appendChild(grid);
 
-  // Horizontal swipe on calendar = change month
-  let calSwipeX = 0;
-  wrap.addEventListener("touchstart", e => { calSwipeX = e.touches[0].clientX; }, { passive: true });
+  // Vertical swipe on calendar = change month (up=next, down=prev)
+  // Horizontal swipe propagates to tab swipe handler naturally
+  let calSwipeX = 0, calSwipeY = 0;
+  wrap.addEventListener("touchstart", e => {
+    calSwipeX = e.touches[0].clientX;
+    calSwipeY = e.touches[0].clientY;
+  }, { passive: true });
   wrap.addEventListener("touchend", e => {
     const dx = e.changedTouches[0].clientX - calSwipeX;
-    if (Math.abs(dx) < 40) return;
-    if (dx < 0) state.tasksCalMonth = { y: m === 11 ? y + 1 : y, m: m === 11 ? 0 : m + 1 };
+    const dy = e.changedTouches[0].clientY - calSwipeY;
+    if (Math.abs(dx) >= Math.abs(dy)) return; // horizontal dominant = tab swipe
+    if (Math.abs(dy) < 30) return;
+    if (dy < 0) state.tasksCalMonth = { y: m === 11 ? y + 1 : y, m: m === 11 ? 0 : m + 1 };
     else state.tasksCalMonth = { y: m === 0 ? y - 1 : y, m: m === 0 ? 11 : m - 1 };
     render();
   }, { passive: true });
@@ -579,11 +585,120 @@ function makeHomeSection(key, title, tasks, emptyMsg, opts = {}) {
       sec.appendChild(el("div", { class: "empty" }, emptyMsg));
     } else {
       const list = el("div", { class: "task-list" });
-      tasks.forEach(t => list.appendChild(renderTaskCard(t, opts)));
-      sec.appendChild(list);
+      if (key === "done") {
+        tasks.forEach(t => list.appendChild(makeSwipeDeleteCard(t)));
+        const sentinel = el("div", { class: "done-list-sentinel" });
+        list.appendChild(sentinel);
+        const deleteAllBtn = el("button", {
+          type: "button", class: "delete-all-btn", "data-delete-all": "1"
+        }, "Apagar todas");
+        deleteAllBtn.hidden = true;
+        deleteAllBtn.addEventListener("click", () => {
+          if (!confirm("Apagar todas as tarefas concluídas? Esta ação não pode ser desfeita.")) return;
+          state.tasks = state.tasks.filter(t => !t.completed);
+          save(); render();
+        });
+        sec.appendChild(list);
+        sec.appendChild(deleteAllBtn);
+        // Show button when sentinel enters viewport
+        const obs = new IntersectionObserver(entries => {
+          deleteAllBtn.hidden = !entries[0].isIntersecting;
+        }, { threshold: 0.5 });
+        obs.observe(sentinel);
+      } else {
+        tasks.forEach(t => list.appendChild(renderTaskCard(t, opts)));
+        sec.appendChild(list);
+      }
     }
   }
   return sec;
+}
+
+/* ===== Swipe-to-delete (Feitas section) ===== */
+
+let _undoTimer = null;
+let _undoTask = null;
+
+function showDeleteUndoToast(task) {
+  if (_undoTimer) clearTimeout(_undoTimer);
+  _undoTask = task;
+  let toastEl = document.getElementById("undo-delete-toast");
+  if (!toastEl) {
+    toastEl = el("div", { id: "undo-delete-toast", class: "undo-delete-toast" });
+    const msg = el("span", { class: "undo-msg" }, "Tarefa removida");
+    const btn = el("button", { type: "button", class: "undo-btn" }, "Desfazer");
+    btn.addEventListener("click", () => {
+      if (_undoTask) {
+        state.tasks.push(_undoTask);
+        _undoTask = null;
+        save(); render();
+      }
+      clearTimeout(_undoTimer);
+      _undoTimer = null;
+      toastEl.hidden = true;
+    });
+    toastEl.append(msg, btn);
+    document.body.appendChild(toastEl);
+  }
+  toastEl.hidden = false;
+  _undoTimer = setTimeout(() => {
+    toastEl.hidden = true;
+    _undoTask = null;
+    _undoTimer = null;
+  }, 3000);
+}
+
+function makeSwipeDeleteCard(task) {
+  const wrap = el("div", { class: "swipe-delete-wrap" });
+  const bg = el("div", { class: "swipe-delete-bg" });
+  bg.innerHTML = '<span class="swipe-delete-icon" aria-hidden="true">🗑</span>';
+  const card = renderTaskCard(task, {});
+
+  let startX = 0, startY = 0, currentDx = 0, dragging = false;
+
+  card.addEventListener("touchstart", e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    currentDx = 0;
+    dragging = true;
+    card.style.transition = "none";
+  }, { passive: true });
+
+  card.addEventListener("touchmove", e => {
+    if (!dragging) return;
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+    if (Math.abs(dy) > Math.abs(dx) + 5) { dragging = false; card.style.transform = ""; return; }
+    if (dx >= 0) { card.style.transform = ""; return; }
+    currentDx = dx;
+    card.style.transform = `translateX(${dx}px)`;
+  }, { passive: true });
+
+  card.addEventListener("touchend", () => {
+    dragging = false;
+    const threshold = wrap.offsetWidth * 0.4 || 120;
+    if (currentDx < -threshold) {
+      card.style.transition = "transform 0.22s ease-in";
+      card.style.transform = "translateX(-110%)";
+      setTimeout(() => {
+        state.tasks = state.tasks.filter(t2 => t2.id !== task.id);
+        save(); render();
+        showDeleteUndoToast(task);
+      }, 230);
+    } else {
+      card.style.transition = "transform 0.18s ease-out";
+      card.style.transform = "";
+      currentDx = 0;
+    }
+  }, { passive: true });
+
+  // Prevent card click when user was swiping
+  wrap.addEventListener("click", e => {
+    if (Math.abs(currentDx) > 8) { e.stopPropagation(); currentDx = 0; }
+  }, true);
+
+  wrap.append(bg, card);
+  return wrap;
 }
 
 /* ===== Task card ===== */
@@ -1017,13 +1132,16 @@ function renderNotebook(nb) {
         pageInfo.appendChild(nameSpan);
         const tmp = document.createElement("div");
         tmp.innerHTML = page.content || "";
-        const lineCount = (tmp.innerText || tmp.textContent || "").split("\n").filter(l => l.trim().length > 0).length;
+        const rawText = (tmp.innerText || tmp.textContent || "").trim();
+        const wordCount = rawText ? rawText.split(/\s+/).filter(Boolean).length : 0;
+        const lineCount = wordCount ? Math.ceil(wordCount / 8) : 0;
         const meta = el("span", { class: "page-date" });
+        const countStr = wordCount ? ` · ${lineCount} linha${lineCount !== 1 ? "s" : ""} · ${wordCount} palavra${wordCount !== 1 ? "s" : ""}` : "";
         if (page.updatedAt) {
           const d = new Date(page.updatedAt);
-          meta.textContent = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) + (lineCount ? ` · ${lineCount} linha${lineCount !== 1 ? "s" : ""}` : "");
-        } else if (lineCount) {
-          meta.textContent = `${lineCount} linha${lineCount !== 1 ? "s" : ""}`;
+          meta.textContent = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) + countStr;
+        } else if (wordCount) {
+          meta.textContent = `${lineCount} linha${lineCount !== 1 ? "s" : ""} · ${wordCount} palavra${wordCount !== 1 ? "s" : ""}`;
         }
         if (meta.textContent) pageInfo.appendChild(meta);
         row.appendChild(pageInfo);
@@ -1205,8 +1323,27 @@ function setupPageToolbar() {
   const toolbar = document.querySelector(".page-toolbar");
   if (!toolbar) return;
   const picker = toolbar.querySelector(".page-tool-color-picker");
+  const colorDot = toolbar.querySelector(".color-btn-dot");
 
-  // 5 color swatches — mousedown keeps focus in contenteditable
+  function hidePicker() { picker.hidden = true; }
+
+  function applyColor(hex) {
+    const editor = document.getElementById("page-content-input");
+    if (editor) editor.focus();
+    if (hex === "default") {
+      // reset to computed text color to avoid removing bold/italic
+      const textColor = getComputedStyle(document.documentElement).getPropertyValue("--text").trim() || "#2d3a3a";
+      document.execCommand("styleWithCSS", false, true);
+      document.execCommand("foreColor", false, textColor);
+      document.execCommand("styleWithCSS", false, false);
+    } else {
+      document.execCommand("foreColor", false, hex);
+    }
+    if (colorDot) colorDot.style.color = hex === "default" ? "" : hex;
+    hidePicker();
+  }
+
+  // Build swatches (picker starts hidden)
   EDITOR_COLORS.forEach(({ hex, label }) => {
     const b = el("button", { type: "button", class: "page-tool-color-swatch", title: label });
     if (hex === "default") {
@@ -1214,27 +1351,30 @@ function setupPageToolbar() {
     } else {
       b.style.background = hex;
     }
-    b.addEventListener("mousedown", e => {
-      e.preventDefault();
-      if (hex === "default") {
-        document.execCommand("removeFormat");
-      } else {
-        document.execCommand("foreColor", false, hex);
-      }
-      picker.hidden = true;
-    });
+    // mousedown = desktop (prevent blur of editor)
+    b.addEventListener("mousedown", e => { e.preventDefault(); applyColor(hex); });
+    // touchend = mobile (prevent ghost click, prevent blur)
+    b.addEventListener("touchstart", e => { e.preventDefault(); }, { passive: false });
+    b.addEventListener("touchend", e => { e.preventDefault(); applyColor(hex); });
     picker.appendChild(b);
   });
+
+  function showPicker(colorBtn) {
+    const r = colorBtn.getBoundingClientRect();
+    picker.style.top = (r.bottom + 4) + "px";
+    picker.style.left = Math.max(4, r.left) + "px";
+    picker.hidden = false;
+  }
 
   toolbar.querySelectorAll("[data-action]").forEach(btn => {
     btn.addEventListener("mousedown", e => {
       e.preventDefault();
       const action = btn.dataset.action;
       if (action === "color") {
-        picker.hidden = !picker.hidden;
+        if (picker.hidden) showPicker(btn); else hidePicker();
         return;
       }
-      picker.hidden = true;
+      hidePicker();
       switch (action) {
         case "bold": document.execCommand("bold"); break;
         case "italic": document.execCommand("italic"); break;
@@ -1246,12 +1386,41 @@ function setupPageToolbar() {
         case "list": document.execCommand("insertUnorderedList"); break;
       }
     });
+    // touch support for non-color buttons
+    if (btn.dataset.action !== "color") {
+      btn.addEventListener("touchstart", e => { e.preventDefault(); }, { passive: false });
+      btn.addEventListener("touchend", e => {
+        e.preventDefault();
+        const action = btn.dataset.action;
+        hidePicker();
+        switch (action) {
+          case "bold": document.execCommand("bold"); break;
+          case "italic": document.execCommand("italic"); break;
+          case "title": {
+            const block = document.queryCommandValue("formatBlock").toLowerCase();
+            document.execCommand("formatBlock", false, block === "h1" ? "p" : "h1");
+            break;
+          }
+          case "list": document.execCommand("insertUnorderedList"); break;
+        }
+      });
+    } else {
+      // color button touch
+      btn.addEventListener("touchstart", e => { e.preventDefault(); }, { passive: false });
+      btn.addEventListener("touchend", e => {
+        e.preventDefault();
+        if (picker.hidden) showPicker(btn); else hidePicker();
+      });
+    }
   });
 
-  // Close picker on click outside toolbar
+  // Close picker on interaction outside
   document.addEventListener("mousedown", e => {
-    if (!toolbar.contains(e.target)) picker.hidden = true;
+    if (!picker.hidden && !toolbar.contains(e.target) && !picker.contains(e.target)) hidePicker();
   });
+  document.addEventListener("touchstart", e => {
+    if (!picker.hidden && !toolbar.contains(e.target) && !picker.contains(e.target)) hidePicker();
+  }, { passive: true });
 }
 
 /* ===== Animations ===== */
@@ -2356,7 +2525,6 @@ function setupUI() {
   document.getElementById("notes-page-modal").addEventListener("click", e => {
     if (e.target.id === "notes-page-modal") closeNotePage();
   });
-  document.getElementById("page-save-btn").addEventListener("click", saveNotePage);
   const pageSaveFab = document.getElementById("page-save-fab");
   if (pageSaveFab) pageSaveFab.addEventListener("click", saveNotePage);
   setupPageToolbar();

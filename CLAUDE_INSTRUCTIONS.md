@@ -71,7 +71,7 @@ Quando alterar código existente: forneça apenas o trecho mudado, com contexto 
   
 - A versão atual do produto está em `CLAUDE_STATE.md` e em `APP_VERSION` no `app.js`.
 - **Mudanças pequenas** (bug fix, ajuste visual, texto): adiciona `+0.01` (ex: 3.00 → 3.01).
-- **Mudanças grandes** (nova funcionalidade, refactor significativo, mudança estrutural): adiciona `+1.00` com reset da parte decimal (ex: 3.01 → 4.00, NÃO 4.01).
+- **Mudanças grandes** (nova funcionalidade, refactor significativo, mudança estrutural): adiciona `+1.00` com reset da parte decimal (ex: 3.01 → 4.00, NÃO 4.01). **Antes de fazer bump +1.00, sempre perguntar ao usuário para confirmar.**
 - Toda mudança de versão deve atualizar: `APP_VERSION` em `app.js`, `CLAUDE_STATE.md`.
 - A versão é exibida no badge do header (`version-badge`) e incrementada a cada commit com mudanças.
 
@@ -111,6 +111,17 @@ Antes de implementar qualquer mudança não-trivial:
 4. **Aguarde "ok prossiga"** explícito antes de codar.
 
 Esta regra é o comportamento padrão para qualquer nova feature, refactor ou mudança visual significativa.
+
+### 15. Perguntas obrigatórias em TODA mensagem recebida
+
+> **OBRIGATÓRIO**: Em **toda** mensagem do usuário, antes de qualquer implementação, fazer **no mínimo 5 perguntas** que abranjam contexto, edge cases, UX, comportamento esperado e pontos ambíguos. Sem exceção. Esta regra prevalece sobre as demais.
+
+1. Leia a mensagem inteira e liste todos os pontos que não estão 100% claros.
+2. Formule ≥5 perguntas cobrindo: comportamento esperado, edge cases, UX mobile vs desktop, persistência, conflitos com comportamentos existentes.
+3. Aguarde as respostas antes de propor plano.
+4. Após respostas: proponha plano de implementação em bullets e aguarde "ok prossiga".
+
+Não pule esta etapa mesmo para pedidos aparentemente simples. Perguntar é mais barato que refazer.
 
 ---
 

@@ -16,9 +16,9 @@ Combina dois papéis:
 **Branch de trabalho atual**: `claude/fix-mobile-cache-update-z3LsR`
 **Branch de deploy**: `claude/fluxo-v2`
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
-**Versão atual**: `6.01`
+**Versão atual**: `6.02`
 
-> **REGRA DE VERSÃO**: TODA MODIFICAÇÃO NO CÓDIGO incrementa a versão. +0.01 para bugfix/ajuste. +1.00 (reset decimal) para nova funcionalidade ou refactor significativo.
+> **REGRA DE VERSÃO**: TODA MODIFICAÇÃO NO CÓDIGO incrementa a versão. +0.01 para bugfix/ajuste (pode fazer sem perguntar). +1.00 (reset decimal) para nova funcionalidade ou refactor significativo — **sempre perguntar ao usuário antes de fazer bump +1.00**.
 
 ---
 
@@ -191,11 +191,12 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 
 ## Como retomar em nova sessão
 
-1. Leia `CLAUDE_INSTRUCTIONS.md` — todas as 14 regras.
+1. Leia `CLAUDE_INSTRUCTIONS.md` — todas as 15 regras.
 2. Leia este arquivo inteiro.
-3. Toda modificação de código = versão incrementa (regra 9).
-4. Antes de codar: avaliar → perguntar → plano → aguardar ok (regra 14).
-5. Atualize este arquivo antes de fechar a sessão.
+3. Toda modificação de código = versão incrementa (regra 9). +1.00 → pedir confirmação.
+4. Em **toda mensagem**: fazer ≥5 perguntas antes de codar (regra 15).
+5. Após respostas: propor plano → aguardar "ok prossiga" → codar (regra 14).
+6. Atualize este arquivo antes de fechar a sessão.
 
 ---
 

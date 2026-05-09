@@ -57,6 +57,9 @@ Quando alterar código existente: forneça apenas o trecho mudado, com contexto 
 - Após mudanças significativas, lembre o usuário de atualizar `CLAUDE_STATE.md` antes do próximo reset.
 
 ### 9. Versão do produto
+
+> **OBRIGATÓRIO**: TODA modificação no código (qualquer arquivo `.js`, `.css`, `.html`, `.json`) implica incremento de versão. Sem exceção. Não existe commit com mudança de código sem versão bumped.
+
 <git_protocol>
 - Branching: Sempre crie branches incrementais baseadas na versão atual do projeto.
 - Nomenclatura Estrita: claude/fluxo-v<VERSÃO> (ex: claude/fluxo-v3.01, claude/fluxo-v3.02).

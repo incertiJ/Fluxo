@@ -51,7 +51,7 @@
         <span id="mic-status" class="mic-status"></span>
 
         <label class="field">
-          <span>Descrição (opcional)</span>
+          <span>Observações (opcional)</span>
           <textarea id="description" rows="2" maxlength="1000"></textarea>
         </label>
 
@@ -287,7 +287,7 @@
   <div id="add-item-modal" class="modal" hidden>
     <div class="modal-content small">
       <header class="modal-header">
-        <h2>Adicionar item</h2>
+        <h2>Adicionar novo item</h2>
         <button id="close-add-item" class="icon-btn" aria-label="Fechar">×</button>
       </header>
       <div class="task-form">
@@ -391,7 +391,7 @@
         </div>
       </header>
       <div class="page-toolbar">
-        <button type="button" class="page-tool-btn" data-action="title">T</button>
+        <button type="button" class="page-tool-btn page-tool-btn--title" data-action="title">T</button>
         <button type="button" class="page-tool-btn page-tool-btn--bold" data-action="bold">N</button>
         <button type="button" class="page-tool-btn page-tool-btn--italic" data-action="italic">I</button>
         <button type="button" class="page-tool-btn page-tool-btn--color" data-action="color">● Cor</button>
@@ -403,6 +403,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Notes page save FAB (fixed bottom-right, only visible when editing a page) -->
+  <button type="button" id="page-save-fab" aria-label="Salvar página">Salvar</button>
 
   <!-- Auth screen (PIN / biometric) -->
   <div id="auth-screen" style="display:none"></div>

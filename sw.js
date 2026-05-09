@@ -1,4 +1,4 @@
-const CACHE = "fluxo-v10";
+const CACHE = "fluxo-v11";
 const NOTIF_CACHE = "fluxo-notif";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js",
@@ -64,7 +64,19 @@ self.addEventListener("message", e => {
   if (data.type === "schedule") {
     scheduledItems = data.items || [];
     persistItems(scheduledItems);
-    rescheduleAll(scheduledItems);
+    // Show any items that are already past-due immediately
+    const now = Date.now();
+    for (const item of scheduledItems) {
+      if (item.triggerMs <= now) {
+        self.registration.showNotification(item.title, {
+          body: item.body,
+          tag: item.id,
+          icon: "./icon.svg",
+          badge: "./icon.svg",
+        }).catch(() => {});
+      }
+    }
+    rescheduleAll(scheduledItems.filter(item => item.triggerMs > now));
   }
 });
 

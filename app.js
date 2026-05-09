@@ -1,28 +1,35 @@
-/* Fluxo v5.01 */
+/* Fluxo v6.01 */
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "5.01";
+const APP_VERSION = "6.01";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
-  "5.01": [
+  "6.01": [
+    "Calendário ocupa 100% da caixa de filtros; bolinhas por tarefa (cor/tamanho = importância)",
+    "Editor de notas WYSIWYG: negrito/itálico/título/lista via execCommand, sem markdown",
+    "Notas: paleta de 4 cores + padrão no editor; cor da página = cor do caderno",
+    "Notas: contagem de linhas não-vazias; ícone de caderno removido das páginas",
+    "Notas: botão Salvar fixo no canto inferior direito, oculto quando teclado aberto",
+    "Compras e Notas: botão + via FAB (igual à aba Tarefas)",
+    "Gesto de voltar via popstate (Android back gesture) fecha modal ou pergunta saída",
+    "Botão testar notificação usa Service Worker (corrige erro no Android Chrome)",
+    "Tarefas feitas: botão ✕ para remover permanentemente",
+    "Expansão de seção preserva posição do scroll",
+    "Ícone de pontual: 𝟏 (1 serifado); título: T serifado; itálico: I inclinado",
+  ],
+  "6.00": [
     "Login com PIN de 4 dígitos + biometria (digital/rosto) via WebAuthn",
     "Filtros de tarefas: 3 dropdowns empilhados (Importância, Categoria, Frequência)",
-    "Calendário: sempre 5 linhas, bolinhas coloridas por score, número sempre visível",
-    "Click fora de dropdown fecha sem acionar elemento embaixo",
     "Fog de transição entre abas: mais visível e mais suave",
     "Compras: click no header expande/colapsa; long press edita a lista",
-    "Compras: cor do texto dos itens = cor da categoria",
-    "Compras: click no nome do item = edição inline",
-    "Notas: long press no caderno = editar; barra de ferramentas no editor",
-    "Editor de notas: T / N / I / Cor / Lista insere markdown no cursor",
-    "Editor de notas: linhas de caderno no fundo do textarea",
+    "Compras: cor do texto dos itens = cor da categoria; click no nome = edição inline",
+    "Notas: long press no caderno = editar",
     "Subtarefas: click no texto = edição inline",
     "Seção 'Feitas' na aba Tarefas com tarefas concluídas",
-    "Notificações: notifs perdidas (SW desligado) são exibidas ao abrir o app",
-    "Notificações: agendamento persistente via Cache API no Service Worker",
+    "Notificações: notifs perdidas são exibidas ao abrir; agendamento persistente no SW",
   ],
   "5.00": [
     "Aba Início renomeada para Tarefas",
@@ -366,6 +373,8 @@ function buildMiniCalendar() {
     const t = new Date();
     state.tasksCalMonth = { y: t.getFullYear(), m: t.getMonth() };
   }
+  // Pre-select today if nothing is selected
+  if (!state.tasksCalDate) state.tasksCalDate = todayISO();
   const { y, m } = state.tasksCalMonth;
 
   const wrap = el("div", { class: "mini-cal" });
@@ -408,6 +417,18 @@ function buildMiniCalendar() {
   cells.slice(0, TOTAL_CELLS).forEach(({ cy, cm, cd, out }) => grid.appendChild(makeMiniCalCell(cy, cm, cd, out)));
 
   wrap.appendChild(grid);
+
+  // Horizontal swipe on calendar = change month
+  let calSwipeX = 0;
+  wrap.addEventListener("touchstart", e => { calSwipeX = e.touches[0].clientX; }, { passive: true });
+  wrap.addEventListener("touchend", e => {
+    const dx = e.changedTouches[0].clientX - calSwipeX;
+    if (Math.abs(dx) < 40) return;
+    if (dx < 0) state.tasksCalMonth = { y: m === 11 ? y + 1 : y, m: m === 11 ? 0 : m + 1 };
+    else state.tasksCalMonth = { y: m === 0 ? y - 1 : y, m: m === 0 ? 11 : m - 1 };
+    render();
+  }, { passive: true });
+
   return wrap;
 }
 
@@ -435,8 +456,9 @@ function makeMiniCalCell(y, m, d, outside) {
   }
 
   cell.addEventListener("click", () => {
-    if (tasks.length) openDayTasksModal(ds);
-    else { state.tasksCalDate = isSelected ? null : ds; render(); }
+    state.tasksCalDate = isSelected ? null : ds;
+    if (tasks.length && !isSelected) openDayTasksModal(ds);
+    else render();
   });
   return cell;
 }
@@ -614,7 +636,11 @@ function renderTaskCard(t, opts = {}) {
 
   const footer = el("div", { class: "task-footer" });
   const freqIcon = el("button", { type: "button", class: "freq-icon", "aria-label": "Frequência" });
-  freqIcon.textContent = t.type === "routine" ? "↻" : "⤓";
+  if (t.type === "routine") {
+    freqIcon.textContent = "↻";
+  } else {
+    freqIcon.innerHTML = '<span class="freq-icon-one">𝟏</span>';
+  }
   freqIcon.addEventListener("click", e => {
     e.stopPropagation();
     const msg = t.type === "routine"
@@ -985,15 +1011,22 @@ function renderNotebook(nb) {
     } else {
       pages.forEach(page => {
         const row = el("div", { class: "page-row" });
-        const pageIcon = el("span", { class: "page-icon" }, "📄");
         const pageInfo = el("div", { class: "page-info" });
-        pageInfo.appendChild(el("span", { class: "page-name" }, page.name));
+        const nameSpan = el("span", { class: "page-name" }, page.name);
+        nameSpan.style.color = nb.color;
+        pageInfo.appendChild(nameSpan);
+        const tmp = document.createElement("div");
+        tmp.innerHTML = page.content || "";
+        const lineCount = (tmp.innerText || tmp.textContent || "").split("\n").filter(l => l.trim().length > 0).length;
+        const meta = el("span", { class: "page-date" });
         if (page.updatedAt) {
           const d = new Date(page.updatedAt);
-          const fmt = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
-          pageInfo.appendChild(el("span", { class: "page-date" }, fmt));
+          meta.textContent = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }) + (lineCount ? ` · ${lineCount} linha${lineCount !== 1 ? "s" : ""}` : "");
+        } else if (lineCount) {
+          meta.textContent = `${lineCount} linha${lineCount !== 1 ? "s" : ""}`;
         }
-        row.append(pageIcon, pageInfo);
+        if (meta.textContent) pageInfo.appendChild(meta);
+        row.appendChild(pageInfo);
         row.addEventListener("click", () => openNotePage(page.id));
         body.appendChild(row);
       });
@@ -1069,11 +1102,37 @@ function openNotePage(pageId, notebookId = null) {
   // Close color picker if open
   const picker = document.querySelector(".page-tool-color-picker");
   if (picker) picker.hidden = true;
+  setupPageSaveFab();
 }
 
 function closeNotePage() {
   document.getElementById("notes-page-modal").hidden = true;
   state.editingPageId = null;
+  teardownPageSaveFab();
+}
+
+let _pageSaveFabVVListener = null;
+
+function setupPageSaveFab() {
+  const fab = document.getElementById("page-save-fab");
+  if (!fab) return;
+  fab.style.display = "flex";
+  if (window.visualViewport) {
+    _pageSaveFabVVListener = () => {
+      const keyboardOpen = window.visualViewport.height < window.innerHeight * 0.75;
+      fab.style.display = keyboardOpen ? "none" : "flex";
+    };
+    window.visualViewport.addEventListener("resize", _pageSaveFabVVListener);
+  }
+}
+
+function teardownPageSaveFab() {
+  const fab = document.getElementById("page-save-fab");
+  if (fab) fab.style.display = "none";
+  if (_pageSaveFabVVListener && window.visualViewport) {
+    window.visualViewport.removeEventListener("resize", _pageSaveFabVVListener);
+    _pageSaveFabVVListener = null;
+  }
 }
 
 /* page preview removed — editor is always active */
@@ -1133,12 +1192,13 @@ function renderMarkdown(text) {
 
 /* ===== Notes page toolbar ===== */
 
+// Colors for notes editor: 4 from TAG_COLORS + default (--text)
 const EDITOR_COLORS = [
-  { hex: "#ffffff", label: "Padrão" },
-  { hex: "#e53935", label: "Vermelho" },
-  { hex: "#43a047", label: "Verde" },
-  { hex: "#1e88e5", label: "Azul" },
-  { hex: "#fdd835", label: "Amarelo" },
+  { hex: "default", label: "Padrão" },
+  { hex: "#b8d9c4", label: "Verde menta" },
+  { hex: "#f0c8a0", label: "Laranja pêssego" },
+  { hex: "#a8c8e0", label: "Azul bebê" },
+  { hex: "#c8b0d8", label: "Lilás" },
 ];
 
 function setupPageToolbar() {
@@ -1149,11 +1209,18 @@ function setupPageToolbar() {
   // 5 color swatches — mousedown keeps focus in contenteditable
   EDITOR_COLORS.forEach(({ hex, label }) => {
     const b = el("button", { type: "button", class: "page-tool-color-swatch", title: label });
-    b.style.background = hex;
-    if (hex === "#ffffff") b.classList.add("page-tool-color-swatch--default");
+    if (hex === "default") {
+      b.classList.add("page-tool-color-swatch--default");
+    } else {
+      b.style.background = hex;
+    }
     b.addEventListener("mousedown", e => {
       e.preventDefault();
-      document.execCommand("foreColor", false, hex);
+      if (hex === "default") {
+        document.execCommand("removeFormat");
+      } else {
+        document.execCommand("foreColor", false, hex);
+      }
       picker.hidden = true;
     });
     picker.appendChild(b);
@@ -1956,12 +2023,19 @@ function checkDueNotifications() {
   const notified = getNotified();
   const items = buildScheduledNotifications(24 * 3600000); // look back 24h for missed notifs
   const allIds = new Set(items.map(i => i.id));
-  for (const it of items) {
-    if (it.triggerMs <= now && !notified.has(it.id)) {
-      try { new Notification(it.title, { body: it.body, tag: it.id, icon: "./icon.svg" }); } catch {}
-      notified.add(it.id);
+  const swReady = "serviceWorker" in navigator ? navigator.serviceWorker.ready.catch(() => null) : Promise.resolve(null);
+  swReady.then(reg => {
+    for (const it of items) {
+      if (it.triggerMs <= now && !notified.has(it.id)) {
+        if (reg) {
+          reg.showNotification(it.title, { body: it.body, tag: it.id, icon: "./icon.svg", badge: "./icon.svg" }).catch(() => {});
+        }
+        notified.add(it.id);
+      }
     }
-  }
+    saveNotified(notified);
+  });
+  return; // async path handles saveNotified
   for (const id of [...notified]) {
     if (!allIds.has(id)) {
       if (id.startsWith("d|")) {
@@ -2283,6 +2357,8 @@ function setupUI() {
     if (e.target.id === "notes-page-modal") closeNotePage();
   });
   document.getElementById("page-save-btn").addEventListener("click", saveNotePage);
+  const pageSaveFab = document.getElementById("page-save-fab");
+  if (pageSaveFab) pageSaveFab.addEventListener("click", saveNotePage);
   setupPageToolbar();
 
   // Notification toggle
@@ -2292,20 +2368,18 @@ function setupUI() {
     });
   });
 
-  // Swipe to change tabs
+  // Swipe to change tabs (edge detection removed — back gesture handled by popstate)
   const swipeTabs = ["home", "shopping", "notes"];
-  let touchStartX = 0, touchStartY = 0, touchStartEdge = false;
+  let touchStartX = 0, touchStartY = 0;
   const viewEl = document.getElementById("view");
   const fogEl = document.getElementById("swipe-fog");
 
   viewEl.addEventListener("touchstart", e => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
-    touchStartEdge = touchStartX > window.innerWidth * 0.85;
   }, { passive: true });
 
   viewEl.addEventListener("touchmove", e => {
-    if (touchStartEdge) return; // back gesture, don't show fog
     const dx = e.touches[0].clientX - touchStartX;
     const absDx = Math.abs(dx);
     if (absDx < 8) { fogEl.style.opacity = "0"; return; }
@@ -2320,20 +2394,9 @@ function setupUI() {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
-
-    // Back gesture: started from right edge, dragged left
-    if (touchStartEdge && dx < -50) {
-      if (!closeLastModal()) {
-        showToast("Deseja sair do Fluxo?");
-      }
-      return;
-    }
-
-    if (!touchStartEdge) {
-      const cur = swipeTabs.indexOf(state.view);
-      if (dx < 0 && cur < swipeTabs.length - 1) setView(swipeTabs[cur + 1]);
-      if (dx > 0 && cur > 0) setView(swipeTabs[cur - 1]);
-    }
+    const cur = swipeTabs.indexOf(state.view);
+    if (dx < 0 && cur < swipeTabs.length - 1) setView(swipeTabs[cur + 1]);
+    if (dx > 0 && cur > 0) setView(swipeTabs[cur - 1]);
   }, { passive: true });
 }
 

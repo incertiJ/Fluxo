@@ -12,339 +12,185 @@ Combina dois papéis:
 **Fluxo** — PWA estático (HTML/CSS/JS puro, sem build) de gestão de tarefas com tema pastel inspirado em rio. Roda local ou em GitHub Pages / Vercel. Storage em `localStorage`. Sem backend.
 
 **Repo**: `incertij/test-claude`
-**Branch de desenvolvimento**: `claude/shopping-categories-refactor-MVqUs` (baseada em `claude/fluxo-v2`)
+**Branch de desenvolvimento**: `claude/fix-mobile-cache-update-z3LsR`
 **Branch de deploy**: `claude/fluxo-v2`
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
-**Nomenclatura de branches**: `claude/fluxo-vX.X-<slug>` (ex: `claude/fluxo-v2-shopping-categories`)
-**Nome legível (display) de branch**: `Fluxo-VXX` (ex: `Fluxo-V20`, `Fluxo-V21`) — usar ao mencionar branches para o usuário
-**Versão atual**: `3.00`
+**Nomenclatura de branches**: `claude/fluxo-vX.X` (ex: `claude/fluxo-v5.01`)
+**Versão atual**: `5.00`
 
 ---
 
-## Status Atual (última sessão)
+## Status Atual
 
-### Implementado nesta iteração (shopping-categories-refactor, branch claude/shopping-categories-refactor-MVqUs)
+### Implementado em v5.00 (branch claude/fix-mobile-cache-update-z3LsR)
 
-**Aba Compras (nova)**
-- Nova tab "Compras" no nav (`data-view="shopping"`)
-- Sistema de categorias: sem listas de compras — cada categoria É a lista
-- Cada categoria: nome, cor (paleta TAG_COLORS), lista de itens, estado collapsed/expanded
-- Categorias são clicáveis (header inteiro) para expandir/recolher
-- Itens: checkbox (marcar comprado), nome, botão remover
-- Adicionar itens inline por categoria (input + Enter ou botão +)
-- Toolbar alinhada: [+ Nova Categoria] [✏️ gerenciar] no mesmo `flex` row
-- Botão de editar categorias usa ícone de lápis (✏️), não engrenagem
-- Modal de criação/edição de categoria: nome + grade de cores (igual tags)
-- Modal de gerenciar categorias: lista clicável para editar/excluir
+**Navegação**
+- Aba "Início" renomeada para "Tarefas" (`data-view="home"` mantido internamente)
+- Aba "Calendário" removida
+- Nova aba "Notas" (`data-view="notes"`)
+- Ordem de abas: Tarefas / Compras / Notas
+- `swipeTabs = ["home", "shopping", "notes"]`
+- FAB oculto nas abas Compras e Notas
 
-**Home — seções redutíveis**
-- Seções "Lembrete" e "Pra hoje" agora têm botão ▼/▶ para colapsar/expandir
-- Estado em `state.homeCollapsed: { reminder, today }` (reset a cada sessão)
-- Seção colapsada: `flex: 0 0 auto`, mostra só o header
-- Seção expandida: `flex: 1 1 50%`, ocupa espaço disponível
+**Aba Tarefas — box filtros+calendário**
+- Box sticky no topo com layout flex horizontal: filtros à esquerda, mini-calendário à direita
+- Linha 1 de filtros: `[⇅ sort]` `[Pontual] [Rotina]` (chips inline de Frequência)
+- Linha 2 de filtros: `[Categoria ▼]` `[Importância ▼]`
+- Filtro "Prazo" removido definitivamente
+- Sort toggle: `state.tasksSortBy = "importance" | "date"` — alterna com botão ⇅
+- Mini-calendário: prev/next mês inline, semana começa domingo
+- Click em dia com tarefas → `day-tasks-modal` centralizado
+- Click em dia sem tarefas → highlight visual (`state.tasksCalDate`)
 
-**Calendário — lista inline**
-- Clique em dia seleciona `state.calSelectedDate` (toggle: clique novamente deseleciona)
-- Dia selecionado: destaque visual com `box-shadow: 0 0 0 2px var(--accent)`
-- Tarefas do dia aparecem em painel inline abaixo da grade (nunca em modal bloqueante)
-- Painel tem botão × para fechar (deselecionar)
-- Removido: modal `day-sheet` do HTML; removidos handlers do setupUI
+**Aba Tarefas — seções**
+- Startup: só Lembrete expandido (`homeCollapsed: { reminder:false, ...: true }`)
+- "Sem data" removida — itens sem data vão para "Mais tarde"
+- "Mais tarde" ordena: com data primeiro (por data asc), sem data depois (por importância)
+- `state.homeCollapsed` não persiste no localStorage (reseta a cada sessão)
 
-**Notificações — logo do Fluxo**
-- Notificações inline (`new Notification`) agora incluem `icon: "./icon.svg"`
-- SW já tinha `icon: "./icon.svg"` desde versão anterior
+**Badge de versão**
+- Clique abre `changelog-modal` (não mais popover)
+- Lista de novidades da versão atual com checkboxes (salvo em `fluxo/changelog-checks`)
 
-**Schema e estado**
-- `state.shopping = { categories: [] }` — nova chave de dados
-- `state.calSelectedDate: null` — dia selecionado no calendário
-- `state.homeCollapsed: { reminder, today }` — estado colapso das seções home
-- `state.editingCategoryId / editingCategoryDraft` — edição de categoria em curso
-- `save()` e `load()` atualizados para incluir `shopping`
+**Aba Notas**
+- Cadernos (`state.notes.notebooks[]`): `{ id, name, color, collapsed }`
+- Páginas (`state.notes.pages[]`): `{ id, notebookId, name, content, updatedAt }`
+- Cores: mesma paleta `TAG_COLORS` (16 pastéis)
+- Cadernos colapsáveis, click no nome abre `notebook-modal`
+- Click em página → `notes-page-modal` com editor + pré-visualização markdown
+- Markdown: `**negrito**`, `*itálico*`, `# H1`, `## H2`, `### H3`, `- lista`
+- Salvar/deletar página com persistência em `fluxo/v2`
 
----
+**Compras**
+- Click em qualquer parte do header da categoria expande/recolhe (já existia, confirmado)
+- Long press em item (550ms) → row substitui para: `[color-dot][name-input][OK btn]`
+- Click no color-dot → abre `cat-modal` para editar cor da categoria
+- Itens coloridos com tint da categoria: `--cat-tint` a 7% de opacidade
+- `--cat-tint` aplicado via `row.style.background`
 
-### Implementado em iteração anterior (v3, committed em claude/fluxo-v2)
+**Gesto back (borda direita)**
+- Swipe iniciando nos últimos 15% da largura → `closeLastModal()`
+- Nenhum modal aberto → toast "Deseja sair do Fluxo?"
+- Modal priority order: tag-edit → tags → modal → renew → quick-date → tag-select → cat → add-item → cat-picker → settings → notes-page → notebook → day-tasks → changelog
 
-**Tema e identidade**
-- Logo SVG estilo rio (3 curvas, gradiente água→menta sobre fundo creme)
-- Título "Fluxo" no header com gradiente pastel (água → menta → areia → coral) via `background-clip: text`
-- Modo escuro automático via `@media (prefers-color-scheme: dark)`. Paleta espelhada: bg `#1a2222`, surface `#232c2c`, importâncias dessaturadas
+**Fog de swipe**
+- `<div id="swipe-fog">` fixo, `pointer-events:none`, z-index:99
+- `opacity = min(|dx|/150, 1) × 0.15`, gradiente para o lado de destino
+- Cor: `var(--accent)`, sem fog se swipe da borda direita
 
-**Layout dos cards de tarefa (Planner-style)**
-- Borda inteira do card colorida pela importância (não barra lateral). Background com tint suave da cor.
-- 2 linhas máximo no corpo: título + tags
-- Canto superior direito: badge crítico (transparente, texto+borda na cor da importância) empilhado com data (`15 jan` + `em 3d` em duas linhas pequenas)
-- Canto inferior direito: ícone de frequência (`↻` rotina, `→` pontual) + contador `done/total`
-- Pontuais sem subtarefas mostram `0/1` → `1/1` ao concluir
-- Click handlers individuais (com `stopPropagation`):
-  - Tag pill → abre modal de edição da tag
-  - Data → abre modal `quick-date-modal` (alterar/remover)
-  - Ícone de frequência → toast com a cadência
-  - Resto do card → modal completo de edição
+**Persistência**
+- `save()`/`load()` incluem `state.notes`
+- `fluxo/changelog-checks` separado (Set de `"VERSION:index"`)
 
-**Animação de conclusão**
-- Função `playBurst(anchor)` cria 14 partículas pastel ao redor do checkbox (CSS keyframe `burst`)
-- Card recebe classe `.completing` que aciona `taskCollapse` (encolhe + fade, 440ms)
-- Após animação: pontual → marca `completed`; rotina → adiciona ao `state.pendingRenewIds` (Set), abre modal de renovação
-- `cancelRenew()` (X ou clique fora) restaura tarefa removendo do Set
-
-**Home reformulada**
-- Tab principal renomeada de duas seções para "Lembrete" (pontuais importantes + próximas) e "Pra hoje" (rotinas com `nextDue <= today`)
-- Cada seção tem altura fixa `flex: 1 1 50%` com cabeçalho sticky e lista interna scrollável
-- View `.view--home` tem `overflow: hidden` (não rola), lists internas rolam
-
-**Tab Pendentes**
-- Renomeada de "A fazer" → "Pendentes"
-- Filtros: 3 dropdowns (Tipo / Importância / Categoria) + toggle "Mostrar concluídas"
-- Removido: campo de busca por texto e chips de tag
-
-**Calendário**
-- Tap no nome do mês abre `month-picker-modal` com seletor ano (‹ › ) + grid 3×4 de meses
-- Score por dia agora inclui rotinas baixas também (decisão do usuário em sessão anterior)
-- Pesos: baixa=1, média=6, alta=10, crítica=30
-
-**Schema e formulário**
-- Adicionado `years` em `interval-unit` e `notif-unit`
-- Renomeado label "Rotineira" → "Se repete"
-- Modal não dá `.focus()` em título → não abre teclado virtual no celular
-
-**Notificações**
-- `offsetMs(amount, unit)` agora suporta `months` (~30d) e `years` (~365d)
-- Digests diários 09h e 22h continuam ativos
-
-### Implementado nesta iteração — 2ª leva (shopping v2 + filtros + calendário)
-
-**Filtros em Pendentes — chips multi-selecionáveis**
-- Substituídos `<select>` por botões chip (toggle on/off, múltipla seleção simultânea)
-- `state.filters.types`, `.imps`, `.tagIds` são agora `Set` (vazio = sem filtro = mostra tudo)
-- Chips de tag aplicam `--chip-color` (cor da tag) quando ativos
-
-**Calendário — sem abertura automática**
-- `setView("calendar")` agora reseta `state.calSelectedDate = null`
-- Entrar na aba Calendário: dia atual apenas destacado visualmente, sem painel aberto
-
-**Aba Compras — segunda iteração**
-- Toolbar simplificada: apenas "+ Adicionar item" (removidos "Nova Categoria" e ✏️ da toolbar)
-- Botão "Adicionar item" abre `add-item-modal` (nome + seletor de categoria)
-- Seletor de categoria abre `cat-picker-modal` com lista de categorias
-  - Cada linha: swatch + nome + botão ✏️ (abre edição sem selecionar)
-  - Clique na linha seleciona a categoria e fecha o picker
-  - Botão "Nova categoria" no rodapé do picker
-- Categorias exibem cor de borda + fundo tintado (`hexToRgba(color, 0.13)` via `--cat-bg`)
-- Botão ✏️ por categoria no header (abre edição da categoria diretamente)
-- Categorias novas criadas com `collapsed: true`
-- Ordem vertical por `items.length` desc (mais itens no topo)
-
-**Estado**
-- `state.addItemDraft: { name, categoryId }` — rascunho do modal de adicionar item
-- `state.catPickerContext: "add-item" | null` — contexto do picker de categorias
-
-### Estados de execução
-- `state.pendingRenewIds: Set` — IDs de rotinas em renovação (escondidas até confirmação)
-- `state.pendingRenew: { taskId } | null`
-- `state.editingDateTaskId` — task sendo editada via quick-date
-- `state.monthPickerYear` — ano sendo navegado no picker do calendário
-- `state.filters: { types: Set, imps: Set, tagIds: Set, showDone }` — chips multi-select
+**SW**: cache `fluxo-v7`
 
 ---
 
-## Arquivos Modificados Recentemente
+## Arquivos Modificados
 
 | Arquivo | Mudança | Tamanho aprox. |
 |---|---|---|
-| `app.js` | Reescrita parcial: home, card layout, animações, filtros, quick-date, month-picker, parse de years | ~1100 linhas |
-| `styles.css` | Reescrita: dark mode, gradiente título, card grid, animações, sections fixas, popover modals | ~700 linhas |
-| `index.html` | Adicionados modais quick-date e month-picker, anos nas selects, label "Se repete" | ~190 linhas |
-| `sw.js` | Cache version `fluxo-v3` (para invalidar cache PWA) | inalterado funcionalmente |
-| `manifest.json` | Sem mudança nesta iteração |
-| `icon.svg` | Sem mudança nesta iteração |
+| `app.js` | Reescrita completa: notas, mini-cal, filtros v2, shopping lp, back gesture, fog, changelog | ~1400 linhas |
+| `styles.css` | Adicionado: filter-cal-box, mini-cal, fog, notes, changelog, small-btn | ~1700 linhas |
+| `index.html` | Tabs atualizadas, novos modais (notes-page, notebook, day-tasks, changelog), fog div | ~280 linhas |
+| `sw.js` | Cache bumped: fluxo-v6 → fluxo-v7 | inalterado funcionalmente |
+| `CLAUDE_INSTRUCTIONS.md` | Adicionada regra 14: workflow obrigatório de avaliar→perguntar→plano→aguardar ok |
+| `CLAUDE_STATE.md` | Este arquivo |
 
 ---
 
-## Pendências Próximas
+## Pendências / Bugs a Verificar
 
-### Mudanças solicitadas pelo usuário — NÃO IMPLEMENTADAS
-
-Sessão de 2026-05 listou 12 mudanças. Apenas a #1 foi feita. Continuar daqui na próxima sessão.
-
-| # | Mudança | Status | Notas técnicas |
-|---|---|---|---|
-| 1 | Reestilizar botão "Criar" no seletor de tags | ✅ FEITO | trocado `ghost-btn` → `primary-btn` em `tag-select-modal` |
-| 2 | Toggle "Sem notificações" na tarefa | ⏳ pendente | novo campo `t.silentNotifications: bool`. Excluir task de `buildScheduledNotifications` E `buildDigestItem`. Default: silencia tudo (per-task + digest) |
-| 3 | Mic embutido no input de título (estilo WhatsApp) | ⏳ pendente | Remover `voice-row` separada. Wrapper relativo no input com `<button class="mic-inline">` posicionado absolute right. Tirar texto "Falar". |
-| 4 | Fix scroll "Pra hoje" só mostra 2 tarefas | ⏳ pendente | Provavelmente `flex: 1 1 50%; max-height: 50%` está calculando errado. Trocar por `flex: 1 1 0; min-height: 0; max-height: none`. Validar ambas seções rolam. |
-| 5 | "Pra hoje" deve incluir pontuais com deadline hoje + ordem desc importância | ⏳ pendente | `renderHome` filter `tasksOnDate(today)` em vez de só rotinas. Sort por `b.importance - a.importance`. NÃO incluir overdue. |
-| 6 | Bandeira (🚩) em vez de seta (→) pra pontuais | ⏳ pendente | `freqIcon.textContent = "🚩"` |
-| 7 | Lembrete: urgente ≤2 dias acima de crítica + texto "Urgente: X horas restantes" | ⏳ pendente | Sort: rank 0 = `diffDays >=0 && <=2`. Calc horas: assumir 23:59 do dia. Substitui texto da data quando urgente. Overdue mantém "vencida há". |
-| 8 | Animação de conclusão muito rápida | ⏳ pendente | Aumentar `taskCollapse` de 0.45s → 0.7s. Aumentar `sleep(440)` → `sleep(700)`. |
-| 9 | Reestilizar toggle "Mostrar concluídas" | ⏳ pendente | Trocar checkbox HTML padrão por chip-style (igual `.imp-chip`). Manter mesmo border-radius/cores do app. |
-| 10 | Labels visíveis para os 3 filtros | ⏳ pendente | "Tipo", "Importância", "Categoria" como `<span>` acima de cada select. |
-| 11 | "Se repete" → "Frequentes" | ⏳ pendente | Em 2 lugares: radio do modal de tarefa (`index.html`) e dropdown de filtro tipo (`app.js renderPending`). |
-| 12 | Click no logo Fluxo abre menu de tema (Auto/Claro/Escuro) | ⏳ pendente | Listener em `.brand`. Pequeno modal/popover com 3 botões. Persistir em `fluxo/theme`. Aplicar via `documentElement.dataset.theme`. CSS: `:root[data-theme="dark"]` override + `:root:not([data-theme="light"]):not([data-theme="dark"])` dentro do media query auto. |
-
-### Defaults assumidos para os pendentes (caso não haja revisão)
-- (#2) Sem notificações silencia tudo (per-task + digests)
-- (#5) "Pra hoje" só `=== today`, NÃO inclui overdue
-- (#7) Texto "Urgente" só para futuro <=48h. Overdue mantém visual de vencida.
-- (#12) Tema oferece 3 opções: Auto / Claro / Escuro
-
-### Tarefas de migração ao concluir os 12 itens
-- Bump cache SW pra `fluxo-v6`
-- Atualizar Decisions Log com cada decisão tomada
-- Mover entradas desta tabela para "Status Atual" ao serem feitas
-- Considerar test no celular após cada lote (sticky, animação, mic)
-
-### Bugs prováveis a verificar no celular (do ciclo anterior)
-1. **Animação burst em iOS Safari**: `prefers-color-scheme` e `position: fixed` em particles podem ter quirks. Validar.
-2. **Modal aninhado**: ao clicar tag dentro do `tags-modal` (gerenciar) → abre `tag-edit-modal` por cima. z-index OK? Validar.
-3. **Sticky header em `.section--home`**: testar scroll dentro da box, header deve permanecer visível.
-4. **Click em data quando overdue**: cor coral do `.task-date.overdue` precisa ter contraste em dark mode.
-5. **Badge crítico em dark mode**: `var(--imp-low)` pode ser pouco legível como cor de texto. Verificar contraste.
-
-### Funcionalidades pedidas mas ainda não confirmadas / implementadas
-- Nenhuma pendente do último ciclo. Aguardando feedback do usuário.
-
-### Pergunta aberta do usuário (não-codificação)
-- "Podemos integrar com Google Calendar?" — usuário pediu como curiosidade. Resposta a dar:
-  - **Sim, viável**, mas exige Google Cloud project + OAuth2 + chave API (sem custo até quotas modestas)
-  - 2 modos: **export one-way** (Fluxo → Google Calendar via API insert) ou **sync bidirecional** (mais complexo, requer webhook ou polling)
-  - Sem backend, OAuth tem que ser via Google Identity Services no client (token de curta duração no localStorage)
-  - Trade-off: introduz dependência externa, dados saem do device, exige configuração inicial do usuário
-  - Sugestão: começar com export one-way (botão "Enviar pra Google Calendar" por tarefa)
-
-### Melhorias técnicas sugeridas (não pedidas)
-- **Long-press na tag** abre menu remover-da-tarefa vs edit (UX melhor que sempre abrir tag-edit global)
-- **Subtarefas em rotinas**: schema atual não suporta. Avaliar se faz sentido.
-- **Importação/exportação JSON**: backup local. ~30 linhas.
-- **Sync entre dispositivos**: exigiria backend. Possível: GitHub Gist como storage gratuito (manual).
-- **Reativar rotina pausada**: hoje precisa abrir o modal e mudar `active`. Botão direto na lista de rotinas inativas seria útil — mas não há lista de inativas hoje.
+| # | Item | Notas |
+|---|---|---|
+| 1 | Long press em desktop (mouse) | Long press usa touchstart/touchend — no desktop o usuário não consegue editar pelo long press. Pode precisar de fallback clique em desktop se necessário. |
+| 2 | Fog: suavidade no iOS | `transition: opacity 0.05s` pode ser rápido demais. Validar no celular. |
+| 3 | Mini-cal: overflow em tela muito pequena | Se tela < 300px, mini-cal (148px) pode comprimir filtros. Testar em 320px. |
+| 4 | `renderMarkdown`: listas múltiplas separadas por texto | Regex de `<ul>` pode unir listas que não estão adjacentes. Validar. |
+| 5 | `page-preview h1/h2/h3` herdam estilos do app | Verificar conflito com `.section h2` global. |
+| 6 | Long press cancela se usuário mover o dedo (touchmove cancela) | Comportamento intencional. Validar se é aceitável. |
 
 ---
 
 ## Dúvidas em Aberto
 
-Todas as 6 dúvidas anteriores foram respondidas. Ver Decisions Log § 2026-05 (continuação).
-
-Espaço para novas dúvidas:
-<!-- Adicionar aqui durante implementações -->
+Nenhuma — todas as perguntas de v5.00 foram respondidas antes do coding.
 
 ---
 
 ## Histórico de Branches
 
-- `claude/task-manager-voice-input-eisIH` — v1, "Minhas Tarefas". Tema escuro/roxo. Schema v1. Mantida para histórico.
-- `claude/fluxo-v2` — v2/v3 atual. Tema pastel, schema novo, calendário, tags, animações.
+- `claude/task-manager-voice-input-eisIH` — v1, "Minhas Tarefas". Mantida para histórico.
+- `claude/fluxo-v2` — v2/v3/v4. Branch de deploy.
+- `claude/fix-mobile-cache-update-z3LsR` — v5.00. Branch atual.
 
 ---
 
 ## Notas de Deploy
 
 - Pages deve apontar pra `claude/fluxo-v2`.
-- Após push de mudanças no SW: usuário precisa fechar o app no celular e reabrir (ou limpar cache do site) para o `fluxo-v3` cache entrar em vigor.
-- localStorage do schema antigo (`minhas-tarefas/v1`) fica órfão mas inofensivo.
+- Após push de mudanças no SW: usuário precisa fechar o app no celular e reabrir (ou limpar cache do site) para o `fluxo-v7` cache entrar em vigor.
+- localStorage: `fluxo/v2` (dados), `fluxo/notified` (notificações), `fluxo/changelog-checks` (checkboxes de changelog).
 
 ---
 
 ## Como retomar em nova sessão
 
-1. Leia `CLAUDE_INSTRUCTIONS.md` (manual de conduta).
-2. Leia esta seção e abra os arquivos listados em "Pendências Próximas" para contexto.
-3. Carregue skill relevante de `.claude-ops/04_skills/` ANTES de codar (refactor / pwa_audit / feature_add).
-4. Antes de codar, valide com o usuário pendências e dúvidas em aberto.
-5. Se a sessão produzir mudanças, atualize este arquivo antes de resetar.
+1. Leia `CLAUDE_INSTRUCTIONS.md` (manual de conduta) — incluindo regra 14 (workflow obrigatório).
+2. Leia esta seção para contexto do estado atual.
+3. Antes de codar: avaliar → perguntar → plano → aguardar ok (regra 14).
+4. Se a sessão produzir mudanças, atualize este arquivo antes de resetar.
 
 ---
 
 ## Decisions Log (append-only)
 
-Registre decisões técnicas e escolhas de produto que NÃO devem ser revisitadas sem motivo. Use formato `YYYY-MM-DD — decisão (razão)`.
-
 ### 2026-04
-- Stack escolhida: HTML/CSS/JS puro, sem build, sem backend (simplicidade + custo zero)
-- Storage local em `localStorage` chave única `fluxo/v2` (sync entre dispositivos NÃO é objetivo desta versão)
-- Áudio sem API: parser pt-BR via regex/keywords, sem Claude API (usuário não quer pagar API)
-- Notificações: per-task (X antes) + digests fixos 09h e 22h (decidido em sessão de planejamento)
-- Granularidade de rotina: dia (sem horários intra-dia) — decisão explícita do usuário
-- Rotinas: 1 ocorrência por vez no calendário; renovação manual após conclusão (suggested = done + interval)
-- Importância: 4 níveis (baixa/média/alta/crítica). Pesos no calendário: 1 / 6 / 10 / 30
-- Calendário: bola única por dia, tamanho/cor pelo score agregado (todas tarefas, incluindo rotinas baixas)
+- Stack escolhida: HTML/CSS/JS puro, sem build, sem backend
+- Storage local em `localStorage` chave única `fluxo/v2`
+- Áudio sem API: parser pt-BR via regex/keywords
+- Notificações: per-task (X antes) + digests fixos 09h e 22h
+- Granularidade de rotina: dia (sem horários intra-dia)
+- Rotinas: renovação manual após conclusão
+- Importância: 4 níveis (baixa/média/alta/crítica). Pesos: 1/6/10/30
 
 ### 2026-05
-- Tabs: Início (Lembrete + Pra hoje) / Pendentes / Calendário. Removidas: Concluídas como aba separada.
-- Home: 2 boxes de altura fixa (~50% cada), header congelado, scroll interno
-- Cards: 2 linhas máximo no corpo (título + tags). Crítica/data canto sup. dir.; freq/contador canto inf. dir.
-- Borda colorida pela importância (não barra lateral)
-- Modo escuro: automático via `prefers-color-scheme`. Sem toggle manual.
-- Filtros em Pendentes: 3 dropdowns (Tipo, Importância, Categoria) + toggle concluídas. Removidos: busca por texto.
-- Tags: 16 cores pastel, CRUD do usuário, default 6 tags pré-criadas
-- Modal de tarefa não auto-foca título (não abre teclado virtual no celular)
-- Ícone de frequência: ↻ pra repete, → pra única. Click mostra cadência via toast.
-- Animação de conclusão: burst de 14 partículas + colapso do card (440ms total)
-- Renovação de rotina: cancelar (X) restaura a tarefa; "não renovar" pausa (active:false)
-- Estrutura `.claude-ops/04_skills/` adicionada para skills carregadas sob demanda (token saver)
-- `CLAUDE_STATE.md` agora combina snapshot + decisions log (memória externa unificada)
+- Tabs: Início / Pendentes / Calendário → v4.00: Início (6 seções) + Compras → v5.00: Tarefas + Compras + Notas
+- Cards: 2 linhas máximo (título + tags). Crit/data canto sup dir; freq/contador canto inf dir.
+- Borda colorida pela importância; background tint
+- Modo escuro: automático via `prefers-color-scheme`. Manual via `data-theme`.
+- Filtros: chips multi-select (Set). Vazio = sem filtro.
+- Tags: 16 cores pastel, CRUD, default 6 tags
+- Animação de conclusão: burst de 14 partículas + colapso (440ms)
+- "Não renovar" rotina = exclusão definitiva
+- `CLAUDE_STATE.md` como single source of truth
 
-### 2026-05 (continuação)
-- Click em tag pill no card abre **seletor leve** de categorias (toggle on/off + criar nova tag inline com cor automática). NÃO abre tag-edit global. Decisão: separar "associar tags a tarefa" de "editar definição da tag" — fluxos distintos.
-- "Não renovar" rotina = **exclusão definitiva** (com confirm). Conceito de rotina pausada (`active:false`) descartado: complexidade não justifica. Migração: load() filtra rotinas com `active:false` e remove campo dos demais.
-- Botão `Não renovar` renomeado para `Excluir rotina` com estilo danger.
-- Estrutura `.claude-ops/04_skills/` (refactor, pwa_audit, feature_add) para carregamento sob demanda.
-- Decision Log e Erros Conhecidos movidos pra `CLAUDE_STATE.md` (single source of truth).
-- "Sem notificações" (toggle por tarefa): silencia per-task **E** digests para essa task.
-- Pra hoje = só `=== today`. Overdue não aparece na home (vai pra Pendentes).
-- Texto "Urgente: X horas restantes" para deadline ≤48h no futuro. Overdue continua "vencida há".
-- Tema: 3 estados (Auto/Claro/Escuro). Override via `:root[data-theme]`.
-
-### 2026-05 (shopping v2 + filtros multi-select)
-- Filtros em Pendentes: chips multi-select (Set) em vez de `<select>`. Vazio = sem filtro ativo.
-- Calendário: `setView` reseta `calSelectedDate` — sem painel automático ao entrar na aba.
-- Aba Compras: toolbar com 1 único botão "+ Adicionar item". Gestão de categorias via picker.
-- Picker de categorias: seleção + edição no mesmo modal. Botão "Nova categoria" no rodapé.
-- Fundo das categorias: tint dinâmico `hexToRgba(color, 0.13)` via CSS var `--cat-bg`.
-- Nomenclatura de branches para o usuário: `Fluxo-VXX` (ex: `Fluxo-V20`).
-
-### 2026-05 (shopping-categories-refactor)
-- Compras: modelo baseado em **categorias**, não listas. Cada categoria tem sua própria lista. Sem lista global de compras.
-- Categorias de compras: CRUD completo (criar/editar nome+cor/excluir), colapsáveis por clique no header
-- Cores de categorias: mesma paleta `TAG_COLORS` das tags de tarefa (16 pastéis)
-- Ícone de edição de categorias: ✏️ (lápis), não engrenagem — padrão mais intuitivo para edição
-- Toolbar da aba compras: 2 botões no mesmo flex row (+ Nova Categoria, ✏️ Gerenciar) — botão add flex:1, botão edit flex-shrink:0
-- Calendário: painel inline abaixo da grade, sem modal bloqueante. Clique no dia = toggle selecionado/deselect.
-- Home: seções Lembrete e Pra hoje são colapsáveis individualmente (▼/▶). Estado NÃO persiste no localStorage — reseta a cada sessão.
-- Notificações: logo do Fluxo incluída em todos os canais (inline + SW já tinha desde antes)
-- Nomenclatura de branches: `claude/fluxo-vX.X-<slug>` como padrão oficial
-
-### 2026-05 (v3.00 — terceira leva de mudanças)
-- Versão bumped para **3.00** (grande mudança: tema manual + schedule de notificações configurável)
-- **Regra de versionamento**: pequena = +0.01; grande = +1.00 com reset decimal (2.4 → 3.00, NÃO 3.4)
-- Tema: Auto/Claro/Escuro. CSS via `data-theme` em `<html>`. `applyTheme()` chamada no init e em cada mudança.
-- Notificações configuráveis: `state.notifSchedule: [{h, m}]` substitui 9h/22h fixos. Persiste no localStorage. UI no modal de configurações.
-- Settings modal: aberto clicando na logo. Contém tema (chips) + schedule de notificações (time inputs) + botão testar.
-- Filtro Concluído em Pendentes: dropdown (igual Tipo/Importância/Categoria), não checkbox.
-- Layout Pendentes: `.view--pending` (overflow: hidden) + `.pending-scroll` (flex:1, overflow-y:auto). Itens nunca atravessam o filtro fixo visualmente.
-- Compras — itens editáveis: clique no nome → input inline. Blur/Enter confirma. Escape cancela.
-- Compras — Enter adiciona item e refoca input da mesma categoria (via `data-cat-id` + requestAnimationFrame).
-- Compras — auto-select categoria: ao criar nova categoria pelo picker, `saveCategoryModal` verifica `catPickerContext === "add-item"` independente de visibilidade do picker.
-- Compras — ícone ✏️ discreto: apenas contorno (`border: 1px solid var(--border)`), sem fundo.
-- Compras — botão + da toolbar foi removido (só "+ Adicionar item" existe).
-- Calendário ao entrar na aba: `calSelectedDate = todayISO()` (mostra painel do dia de hoje imediatamente).
-- `buildDigestItem` ID format: `d|HHMM|YYYY-MM-DD` (ex: `d|0900|2026-05-06`).
-- `nextOccurrenceOfTime(h, m, 0)` não avança mais para o dia seguinte: o `notified` Set deduplicata, e o digest do dia que já passou ainda aparece para `checkDueNotifications` disparar se ainda não foi notificado.
-- Limpeza de `notified`: IDs `d|...` limpados por `diffDays`; IDs de tarefa limpos por timestamp.
-- SW: cache bumped para `fluxo-v6`. Re-arma timers em todo evento fetch (mantém notificações vivas).
-- Version badge no header: `<span id="version-badge">` exibindo `v3.00`.
-- `render()` só anima `viewIn` quando a view muda (evita flash em re-renders da mesma aba).
-- Checkbox/radio global: `appearance: none`, fundo transparente, borda `--border-strong`, arredondado; check ✓ branco sobre `--accent`. Regra global — nunca override por componente.
-
-### Reservado pra próximas decisões
-<!-- Adicionar entradas datadas aqui ao tomar decisões -->
+### 2026-05 (v5.00)
+- Calendário: removido como aba. Mini-calendário embutido na aba Tarefas.
+- Seção "Sem data": removida. Itens sem data aparecem em "Mais tarde" (no final da lista, após datas futuras).
+- Filtros aba Tarefas: sem "Prazo". Layout: [⇅][Frequência chips] / [Categoria ▼][Importância ▼]
+- "Tipo" renomeado para "Frequência" nos filtros (não no modal de tarefa)
+- Sort: `state.tasksSortBy` = "importance"|"date", NÃO persiste no localStorage
+- Mini-calendário: só prev/next inline (sem month-picker-modal)
+- Notas: cadernos + páginas. Cor dos cadernos = mesma paleta TAG_COLORS.
+- Markdown: implementação própria lightweight (sem biblioteca)
+- Long press shopping: 550ms → row inline [color-dot][input][OK]. Color-dot = cor da categoria.
+- Back gesture: borda direita (15% da largura) → fecha último modal. Sem modal = toast saída.
+- Fog: overlay `#swipe-fog` com gradient na direção do swipe, opacidade 0-15%.
+- Version badge: abre changelog-modal (não popover). Checkboxes salvos em `fluxo/changelog-checks`.
+- Regra 14 em CLAUDE_INSTRUCTIONS.md: workflow obrigatório avaliar→perguntar→plano→ok para todos os inputs.
 
 ---
 
 ## Erros já cometidos / armadilhas a evitar
 
-- **Sticky header dentro de container errado**: `position: sticky` falha se o ancestral com `overflow: auto` não é o pai direto da hierarquia esperada. Sempre validar.
+- **Sticky header dentro de container errado**: `position: sticky` falha se o ancestral com `overflow: auto` não é o pai direto.
 - **Modal `display: flex` + `[hidden]`**: o flex sobrescreve hidden. Adicionar `.modal[hidden] { display: none; }`.
-- **`new Notification()` em Android Chrome**: lança exceção. Sempre via `serviceWorkerRegistration.showNotification()` em mobile.
-- **Cache do SW não invalida**: bumpa o nome (`fluxo-v2` → `fluxo-v3`) ao mudar JS/CSS, senão usuários ficam presos na versão antiga.
-- **Auto-focus em input dentro de modal**: dispara teclado virtual e cobre a tela. Evitar `.focus()` programático em mobile.
+- **`new Notification()` em Android Chrome**: lança exceção. Sempre via SW em mobile.
+- **Cache do SW não invalida**: bumpar o nome ao mudar JS/CSS.
+- **Auto-focus em input dentro de modal**: dispara teclado virtual. Evitar `.focus()` programático.
+- **Checkbox/radio global**: TODOS devem seguir estilo de `styles.css`. Nunca `accent-color` ou `appearance: auto`.
+- **Ícones com fundo colorido**: proibido. Apenas contorno + fundo transparente.
+- **Text inputs fora do padrão**: sempre `background: var(--surface-2)`, `border: 1px solid var(--border)`, `border-radius: 10px`.
+- **Seções colapsáveis**: clique no `.section-hdr` inteiro, não só na seta. Seta é `pointer-events: none`.
+- **Dropdowns sem fechamento externo**: sempre usar `setTimeout(10)` + `document.addEventListener("click", handler)` com `wrap.contains(e.target)`.

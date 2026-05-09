@@ -1,20 +1,27 @@
-/* Fluxo v2 */
+/* Fluxo v5.00 */
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
-const APP_VERSION = "4.00";
+const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
+const APP_VERSION = "5.00";
 
 const CHANGELOG = {
-  "4.00": [
-    "Aba Pendentes removida — tarefas organizadas na tela Início",
-    "Início: 6 seções (Lembrete, Atrasadas, Para hoje, Próxima semana, Mais tarde, Sem data)",
-    "Filtros por Tipo, Categoria, Importância e Prazo na tela Início",
-    "Deslize o dedo para navegar entre as abas",
-    "Toque no cabeçalho de qualquer seção para expandir/recolher",
-    "Notificações por tarefa: padrão desativado (Não/Sim)",
-    "Ícone de rotina (↻) e pontual (⚑) sem cor — só contorno",
-    "Compras: toque no nome da categoria para editar (ícone removido)",
-    "Dropdowns fecham ao tocar em qualquer parte da tela",
+  "5.00": [
+    "Aba Início renomeada para Tarefas",
+    "Aba Calendário removida — mini-calendário embutido na aba Tarefas",
+    "Filtros reorganizados: Frequência + Importância + Categoria com ícone de ordenação",
+    "Ordenação por importância ou data (botão ⇅ nos filtros)",
+    "Seção “Sem data” removida — itens aparecem em “Mais tarde”",
+    "Somente Lembretes expandido ao iniciar o app",
+    "Click no dia do calendário com tarefas abre modal centralizado",
+    "Nova aba Notas com cadernos, páginas e markdown leve",
+    "Markdown: **negrito**, *itálico*, # título, - lista",
+    "Compras: long press em item abre edição com cor da categoria e nome",
+    "Compras: itens coloridos com tint da categoria",
+    "Gesto de deslize da borda direita fecha o modal aberto",
+    "Nenhum modal aberto + gesto = toast de saída",
+    "Fog visual suave ao deslizar entre abas",
+    "Badge de versão abre lista das novidades desta versão com checkboxes",
   ],
 };
 
@@ -41,6 +48,7 @@ const state = {
   tasks: [],
   tags: [],
   shopping: { categories: [] },
+  notes: { notebooks: [], pages: [] },
   view: "home",
   editingId: null,
   draftSubtasks: [],
@@ -50,22 +58,26 @@ const state = {
   installPrompt: null,
   notifSchedule: [{ h: 9, m: 0 }, { h: 22, m: 0 }],
   appTheme: "auto",
-  calMonth: null,
-  calSelectedDate: null,
-  monthPickerYear: null,
+  tasksCalMonth: null,
+  tasksCalDate: null,
   pendingRenew: null,
   pendingRenewIds: new Set(),
   editingTagId: null,
   editingTagDraft: null,
   editingDateTaskId: null,
   editingTagsTaskId: null,
-  homeCollapsed: { reminder: false, atrasadas: false, today: false, nextweek: true, later: true, nodate: true },
-  homeFilters: { types: new Set(), imps: new Set(), tagIds: new Set(), prazo: "all" },
-  homeFilterOpen: { type: false, imp: false, tag: false, prazo: false },
+  homeCollapsed: { reminder: false, atrasadas: true, today: true, nextweek: true, later: true },
+  homeFilters: { types: new Set(), imps: new Set(), tagIds: new Set() },
+  homeFilterOpen: { freq: false, imp: false, tag: false },
+  tasksSortBy: "importance",
   editingCategoryId: null,
   editingCategoryDraft: null,
   addItemDraft: { name: "", categoryId: null },
   catPickerContext: null,
+  editingNotebookId: null,
+  editingNotebookDraft: null,
+  editingPageId: null,
+  pagePreviewMode: false,
   _lastView: null,
 };
 
@@ -95,6 +107,7 @@ function load() {
       state.tasks = data.tasks || [];
       state.tags = data.tags || [];
       state.shopping = data.shopping || { categories: [] };
+      state.notes = data.notes || { notebooks: [], pages: [] };
       state.notifSchedule = data.notifSchedule || [{ h: 9, m: 0 }, { h: 22, m: 0 }];
       state.appTheme = data.appTheme || "auto";
     }
@@ -103,17 +116,14 @@ function load() {
     state.tags = DEFAULT_TAGS.map(t => ({ id: uid(), name: t.name, color: t.color }));
     save();
   }
-  // migration: rotinas pausadas (active:false) foram removidas como conceito
-  const before = state.tasks.length;
   state.tasks = state.tasks.filter(t => !(t.type === "routine" && t.active === false));
   state.tasks.forEach(t => { delete t.active; });
-  if (state.tasks.length !== before) save();
 }
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     tasks: state.tasks, tags: state.tags, shopping: state.shopping,
-    notifSchedule: state.notifSchedule, appTheme: state.appTheme,
+    notes: state.notes, notifSchedule: state.notifSchedule, appTheme: state.appTheme,
   }));
 }
 
@@ -121,9 +131,13 @@ function getNotified() {
   try { return new Set(JSON.parse(localStorage.getItem(NOTIFIED_KEY) || "[]")); }
   catch { return new Set(); }
 }
-function saveNotified(s) {
-  localStorage.setItem(NOTIFIED_KEY, JSON.stringify([...s]));
+function saveNotified(s) { localStorage.setItem(NOTIFIED_KEY, JSON.stringify([...s])); }
+
+function getChangelogChecks() {
+  try { return new Set(JSON.parse(localStorage.getItem(CHANGELOG_CHECKS_KEY) || "[]")); }
+  catch { return new Set(); }
 }
+function saveChangelogChecks(s) { localStorage.setItem(CHANGELOG_CHECKS_KEY, JSON.stringify([...s])); }
 
 /* ===== dates ===== */
 
@@ -189,12 +203,7 @@ function scoreDotStyle(score) {
 function tagById(id) { return state.tags.find(t => t.id === id); }
 function tagsOf(task) { return (task.tags || []).map(tagById).filter(Boolean); }
 
-function isRoutineHidden(t) {
-  return t.type === "routine" && state.pendingRenewIds.has(t.id);
-}
-function isOneoffHidden(t) {
-  return t.type === "oneoff" && t.completed;
-}
+function isRoutineHidden(t) { return t.type === "routine" && state.pendingRenewIds.has(t.id); }
 
 function tasksOnDate(dateStr) {
   const items = [];
@@ -240,7 +249,6 @@ function el(tag, attrs = {}, ...children) {
 
 function setView(v) {
   state.view = v;
-  if (v === "calendar") state.calSelectedDate = todayISO();
   document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.view === v));
   render();
 }
@@ -253,7 +261,7 @@ function render() {
   state._lastView = state.view;
 
   view.innerHTML = "";
-  view.className = "view view--scrollable";
+  view.className = "view";
 
   if (viewChanged) {
     void view.offsetWidth;
@@ -261,11 +269,11 @@ function render() {
     requestAnimationFrame(() => { view.style.animation = ""; });
   }
 
-  fab.hidden = state.view === "shopping";
+  fab.hidden = (state.view === "shopping" || state.view === "notes");
 
   if (state.view === "home") renderHome(view);
-  else if (state.view === "calendar") renderCalendar(view);
   else if (state.view === "shopping") renderShopping(view);
+  else if (state.view === "notes") renderNotes(view);
 }
 
 function unique(arr, keyFn) {
@@ -278,7 +286,7 @@ function unique(arr, keyFn) {
   return out;
 }
 
-/* ===== Home ===== */
+/* ===== Home (Tarefas) ===== */
 
 function taskDue(t) { return t.type === "oneoff" ? t.deadline : t.nextDue; }
 
@@ -327,36 +335,43 @@ function makeFilterDropdown(openObj, key, label, buildBody) {
   return wrap;
 }
 
-function buildHomeFilters(root) {
+function buildFilterPanel() {
   const hf = state.homeFilters;
   const fo = state.homeFilterOpen;
-  const filters = el("section", { class: "filters" });
+  const panel = el("div", { class: "filter-cal-box" });
 
-  filters.appendChild(makeFilterDropdown(fo, "type", "Tipo", body => {
-    [["oneoff", "Pontual"], ["routine", "Rotina"]].forEach(([v, lbl]) => {
-      const chip = el("button", { type: "button", class: "filter-chip" + (hf.types.has(v) ? " active" : "") }, lbl);
-      chip.addEventListener("click", () => {
-        if (hf.types.has(v)) hf.types.delete(v); else hf.types.add(v);
-        chip.classList.toggle("active", hf.types.has(v));
-        render();
-      });
-      body.appendChild(chip);
+  // Left: filters
+  const left = el("div", { class: "filter-left" });
+
+  // Row 1: sort icon + frequência chips
+  const row1 = el("div", { class: "filter-row" });
+
+  const sortBtn = el("button", { type: "button", class: "sort-btn" + (state.tasksSortBy === "date" ? " active" : ""), title: state.tasksSortBy === "date" ? "Ordenar por importância" : "Ordenar por data" });
+  sortBtn.textContent = "⇅";
+  sortBtn.addEventListener("click", () => {
+    state.tasksSortBy = state.tasksSortBy === "importance" ? "date" : "importance";
+    render();
+  });
+  row1.appendChild(sortBtn);
+
+  // Frequência chips inline (not dropdown)
+  const freqGroup = el("div", { class: "filter-chips-inline" });
+  [["oneoff", "Pontual"], ["routine", "Rotina"]].forEach(([v, lbl]) => {
+    const chip = el("button", { type: "button", class: "filter-chip-inline" + (hf.types.has(v) ? " active" : "") }, lbl);
+    chip.addEventListener("click", () => {
+      if (hf.types.has(v)) hf.types.delete(v); else hf.types.add(v);
+      chip.classList.toggle("active", hf.types.has(v));
+      render();
     });
-  }));
+    freqGroup.appendChild(chip);
+  });
+  row1.appendChild(freqGroup);
+  left.appendChild(row1);
 
-  filters.appendChild(makeFilterDropdown(fo, "imp", "Importância", body => {
-    [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
-      const chip = el("button", { type: "button", class: "filter-chip" + (hf.imps.has(v) ? " active" : "") }, lbl);
-      chip.addEventListener("click", () => {
-        if (hf.imps.has(v)) hf.imps.delete(v); else hf.imps.add(v);
-        chip.classList.toggle("active", hf.imps.has(v));
-        render();
-      });
-      body.appendChild(chip);
-    });
-  }));
+  // Row 2: categoria + importância dropdowns
+  const row2 = el("div", { class: "filter-row" });
 
-  filters.appendChild(makeFilterDropdown(fo, "tag", "Categoria", body => {
+  row2.appendChild(makeFilterDropdown(fo, "tag", "Categoria", body => {
     state.tags.forEach(tag => {
       const chip = el("button", { type: "button", class: "filter-chip filter-chip--tag" + (hf.tagIds.has(tag.id) ? " active" : "") }, tag.name);
       chip.style.setProperty("--chip-color", tag.color);
@@ -369,80 +384,181 @@ function buildHomeFilters(root) {
     });
   }));
 
-  filters.appendChild(makeFilterDropdown(fo, "prazo", "Prazo", body => {
-    [["all", "Todos"], ["today", "Hoje"], ["week", "Esta semana"], ["month", "Este mês"], ["nodate", "Sem data"]].forEach(([v, lbl]) => {
-      const chip = el("button", { type: "button", class: "filter-chip" + (hf.prazo === v ? " active" : "") }, lbl);
+  row2.appendChild(makeFilterDropdown(fo, "imp", "Importância", body => {
+    [["4", "Crítica"], ["3", "Alta"], ["2", "Média"], ["1", "Baixa"]].forEach(([v, lbl]) => {
+      const chip = el("button", { type: "button", class: "filter-chip" + (hf.imps.has(v) ? " active" : "") }, lbl);
       chip.addEventListener("click", () => {
-        hf.prazo = v;
-        body.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("active"));
-        chip.classList.add("active");
+        if (hf.imps.has(v)) hf.imps.delete(v); else hf.imps.add(v);
+        chip.classList.toggle("active", hf.imps.has(v));
         render();
       });
       body.appendChild(chip);
     });
   }));
 
-  root.appendChild(filters);
+  left.appendChild(row2);
+  panel.appendChild(left);
+
+  // Right: mini calendar
+  panel.appendChild(buildMiniCalendar());
+
+  return panel;
+}
+
+function buildMiniCalendar() {
+  if (!state.tasksCalMonth) {
+    const t = new Date();
+    state.tasksCalMonth = { y: t.getFullYear(), m: t.getMonth() };
+  }
+  const { y, m } = state.tasksCalMonth;
+
+  const wrap = el("div", { class: "mini-cal" });
+
+  // Header: prev | month name | next
+  const hdr = el("div", { class: "mini-cal-hdr" });
+  const prev = el("button", { type: "button", class: "mini-cal-nav" }, "‹");
+  prev.addEventListener("click", e => {
+    e.stopPropagation();
+    state.tasksCalMonth = { y: m === 0 ? y - 1 : y, m: m === 0 ? 11 : m - 1 };
+    render();
+  });
+  const next = el("button", { type: "button", class: "mini-cal-nav" }, "›");
+  next.addEventListener("click", e => {
+    e.stopPropagation();
+    state.tasksCalMonth = { y: m === 11 ? y + 1 : y, m: m === 11 ? 0 : m + 1 };
+    render();
+  });
+  const monthName = new Date(y, m, 1).toLocaleDateString("pt-BR", { month: "short" });
+  const title = el("span", { class: "mini-cal-month" }, monthName.charAt(0).toUpperCase() + monthName.slice(1) + " " + y);
+  hdr.append(prev, title, next);
+  wrap.appendChild(hdr);
+
+  // Grid
+  const grid = el("div", { class: "mini-cal-grid" });
+  ["D", "S", "T", "Q", "Q", "S", "S"].forEach(d => grid.appendChild(el("div", { class: "mini-cal-dow" }, d)));
+
+  const first = new Date(y, m, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const prevDays = new Date(y, m, 0).getDate();
+
+  for (let i = 0; i < startDow; i++) {
+    const day = prevDays - startDow + 1 + i;
+    grid.appendChild(makeMiniCalCell(y, m - 1, day, true));
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    grid.appendChild(makeMiniCalCell(y, m, d, false));
+  }
+  const total = startDow + daysInMonth;
+  const trailing = (7 - (total % 7)) % 7;
+  for (let i = 1; i <= trailing; i++) {
+    grid.appendChild(makeMiniCalCell(y, m + 1, i, true));
+  }
+
+  wrap.appendChild(grid);
+  return wrap;
+}
+
+function makeMiniCalCell(y, m, d, outside) {
+  const date = new Date(y, m, d);
+  const ds = ymd(date);
+  const hasTasks = tasksOnDate(ds).length > 0;
+  const isSelected = ds === state.tasksCalDate;
+  const isToday = ds === todayISO();
+
+  const cell = el("div", {
+    class: "mini-cal-day"
+      + (outside ? " outside" : "")
+      + (isToday ? " today" : "")
+      + (isSelected ? " selected" : "")
+      + (hasTasks ? " has-tasks" : "")
+  });
+  cell.appendChild(el("span", {}, String(date.getDate())));
+
+  cell.addEventListener("click", () => {
+    if (hasTasks) {
+      openDayTasksModal(ds);
+    } else {
+      state.tasksCalDate = isSelected ? null : ds;
+      render();
+    }
+  });
+  return cell;
+}
+
+function openDayTasksModal(ds) {
+  state.tasksCalDate = ds;
+  const tasks = tasksOnDate(ds).sort((a, b) => b.importance - a.importance);
+  const d = parseYMD(ds);
+  const label = d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long" });
+  document.getElementById("day-tasks-title").textContent = label.charAt(0).toUpperCase() + label.slice(1);
+  const body = document.getElementById("day-tasks-body");
+  body.innerHTML = "";
+  if (!tasks.length) {
+    body.appendChild(el("p", { class: "empty" }, "Nenhuma tarefa neste dia."));
+  } else {
+    const list = el("div", { class: "task-list" });
+    tasks.forEach(t => list.appendChild(renderTaskCard(t)));
+    body.appendChild(list);
+  }
+  document.getElementById("day-tasks-modal").hidden = false;
 }
 
 function renderHome(root) {
+  root.className = "view view--home";
   const today = todayISO();
   const in7 = ymd(new Date(Date.now() + 7 * 86400000));
-  const in30 = ymd(new Date(Date.now() + 30 * 86400000));
   const hf = state.homeFilters;
 
-  buildHomeFilters(root);
+  // Filter + calendar box
+  root.appendChild(buildFilterPanel());
+
+  // Scrollable sections container
+  const scroll = el("div", { class: "home-scroll" });
 
   function passesFilter(t) {
     if (hf.types.size > 0 && !hf.types.has(t.type)) return false;
     if (hf.imps.size > 0 && !hf.imps.has(String(t.importance))) return false;
     if (hf.tagIds.size > 0 && !(t.tags || []).some(id => hf.tagIds.has(id))) return false;
-    if (hf.prazo !== "all") {
-      const due = taskDue(t);
-      if (hf.prazo === "today" && due !== today) return false;
-      if (hf.prazo === "week" && (!due || due > in7)) return false;
-      if (hf.prazo === "month" && (!due || due > in30)) return false;
-      if (hf.prazo === "nodate" && due) return false;
-    }
     return true;
   }
 
-  function isVisible(t) {
-    return !t.completed && !isRoutineHidden(t) && passesFilter(t);
-  }
+  function isVisible(t) { return !t.completed && !isRoutineHidden(t) && passesFilter(t); }
 
   const byImp = (a, b) => b.importance - a.importance;
   const byDueThenImp = (a, b) => (taskDue(a) || "").localeCompare(taskDue(b) || "") || b.importance - a.importance;
+  const sortFn = state.tasksSortBy === "date" ? byDueThenImp : byImp;
 
   const reminder = state.tasks.filter(t =>
     isVisible(t) && t.type === "oneoff" && t.importance >= 3 &&
     !(t.deadline && t.deadline <= today)
   ).sort((a, b) => byImp(a, b) || (a.deadline || "9999").localeCompare(b.deadline || "9999"));
 
-  const overdue = state.tasks.filter(t => isVisible(t) && taskDue(t) && taskDue(t) < today)
-    .sort(byImp);
-
-  const todayTasks = state.tasks.filter(t => isVisible(t) && taskDue(t) === today)
-    .sort(byImp);
-
+  const overdue = state.tasks.filter(t => isVisible(t) && taskDue(t) && taskDue(t) < today).sort(sortFn);
+  const todayTasks = state.tasks.filter(t => isVisible(t) && taskDue(t) === today).sort(sortFn);
   const nextweek = state.tasks.filter(t => {
     const due = taskDue(t);
     return isVisible(t) && due && due > today && due <= in7;
   }).sort(byDueThenImp);
 
+  // "Mais tarde" includes items with no date
   const later = state.tasks.filter(t => {
     const due = taskDue(t);
-    return isVisible(t) && due && due > in7;
-  }).sort(byDueThenImp);
+    return isVisible(t) && (!due || due > in7);
+  }).sort((a, b) => {
+    const da = taskDue(a), db = taskDue(b);
+    if (!da && !db) return b.importance - a.importance;
+    if (!da) return 1;
+    if (!db) return -1;
+    return da.localeCompare(db) || b.importance - a.importance;
+  });
 
-  const nodate = state.tasks.filter(t => isVisible(t) && !taskDue(t)).sort(byImp);
-
-  root.appendChild(makeHomeSection("reminder", "Lembrete", reminder, "Nenhuma tarefa importante próxima."));
-  root.appendChild(makeHomeSection("atrasadas", "Atrasadas", overdue, "Nenhuma tarefa atrasada."));
-  root.appendChild(makeHomeSection("today", "Para hoje", todayTasks, "Nenhuma tarefa para hoje."));
-  root.appendChild(makeHomeSection("nextweek", "Próxima semana", nextweek, "Nenhuma tarefa para a semana."));
-  root.appendChild(makeHomeSection("later", "Mais tarde", later, "Nenhuma tarefa além desta semana."));
-  root.appendChild(makeHomeSection("nodate", "Sem data", nodate, "Nenhuma tarefa sem prazo."));
+  scroll.appendChild(makeHomeSection("reminder", "Lembrete", reminder, "Nenhuma tarefa importante próxima."));
+  scroll.appendChild(makeHomeSection("atrasadas", "Atrasadas", overdue, "Nenhuma tarefa atrasada."));
+  scroll.appendChild(makeHomeSection("today", "Para hoje", todayTasks, "Nenhuma tarefa para hoje."));
+  scroll.appendChild(makeHomeSection("nextweek", "Próxima semana", nextweek, "Nenhuma tarefa para a semana."));
+  scroll.appendChild(makeHomeSection("later", "Mais tarde", later, "Nenhuma tarefa além desta semana."));
+  root.appendChild(scroll);
 }
 
 function makeHomeSection(key, title, tasks, emptyMsg) {
@@ -498,7 +614,6 @@ function renderTaskCard(t) {
   cb.checked = !!t.completed;
   cb.addEventListener("click", e => { e.stopPropagation(); toggleComplete(t.id); });
 
-  // content (left): title + tags
   const content = el("div", { class: "task-content" });
   content.appendChild(el("div", { class: "task-title" }, t.title));
 
@@ -511,7 +626,6 @@ function renderTaskCard(t) {
   });
   content.appendChild(tagPills);
 
-  // corner (top-right): crit badge + date stacked
   const corner = el("div", { class: "task-corner" });
   corner.appendChild(el("span", { class: "crit-badge", "data-imp": t.importance }, IMP_LABEL[t.importance]));
 
@@ -524,7 +638,6 @@ function renderTaskCard(t) {
     corner.appendChild(dateEl);
   }
 
-  // footer (bottom-right): freq + counter
   const footer = el("div", { class: "task-footer" });
   const freqIcon = el("button", { type: "button", class: "freq-icon", "aria-label": "Frequência" });
   freqIcon.textContent = t.type === "routine" ? "↻" : "⚑";
@@ -547,8 +660,7 @@ function renderTaskCard(t) {
       done = t.completed ? 1 : 0;
     }
   } else {
-    total = 1;
-    done = 0;
+    total = 1; done = 0;
   }
   footer.appendChild(el("span", { class: "sub-counter" + (done >= total ? " complete" : "") }, `${done}/${total}`));
 
@@ -557,128 +669,10 @@ function renderTaskCard(t) {
   return card;
 }
 
-
-/* ===== Calendar ===== */
-
-function renderCalendar(root) {
-  if (!state.calMonth) {
-    const t = new Date();
-    state.calMonth = { y: t.getFullYear(), m: t.getMonth() };
-  }
-  const { y, m } = state.calMonth;
-
-  const header = el("div", { class: "cal-header" });
-  const prev = el("button", { class: "cal-nav-btn" }, "‹");
-  prev.addEventListener("click", () => {
-    state.calMonth = { y: m === 0 ? y - 1 : y, m: m === 0 ? 11 : m - 1 };
-    render();
-  });
-  const next = el("button", { class: "cal-nav-btn" }, "›");
-  next.addEventListener("click", () => {
-    state.calMonth = { y: m === 11 ? y + 1 : y, m: m === 11 ? 0 : m + 1 };
-    render();
-  });
-  const monthName = new Date(y, m, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-  const title = el("h2", {}, monthName.charAt(0).toUpperCase() + monthName.slice(1));
-  title.addEventListener("click", openMonthPicker);
-  header.append(prev, title, next);
-  root.appendChild(header);
-
-  const grid = el("div", { class: "cal-grid" });
-  ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"].forEach(d => grid.appendChild(el("div", { class: "cal-dow" }, d)));
-
-  const first = new Date(y, m, 1);
-  const startDow = first.getDay();
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const prevDays = new Date(y, m, 0).getDate();
-  for (let i = 0; i < startDow; i++) {
-    const day = prevDays - startDow + 1 + i;
-    grid.appendChild(makeCalCell(y, m - 1, day, true));
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    grid.appendChild(makeCalCell(y, m, d, false));
-  }
-  const total = startDow + daysInMonth;
-  const trailing = (7 - (total % 7)) % 7;
-  for (let i = 1; i <= trailing; i++) {
-    grid.appendChild(makeCalCell(y, m + 1, i, true));
-  }
-  root.appendChild(grid);
-
-  // Inline day panel
-  if (state.calSelectedDate) {
-    const items = tasksOnDate(state.calSelectedDate).sort((a, b) => b.importance - a.importance);
-    const panel = el("section", { class: "section" });
-    const panelHdr = el("div", { class: "section-hdr" });
-    const dateLabel = parseYMD(state.calSelectedDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
-    panelHdr.appendChild(el("h2", {}, dateLabel));
-    const closeBtn = el("button", { type: "button", class: "section-toggle" }, "×");
-    closeBtn.addEventListener("click", () => { state.calSelectedDate = null; render(); });
-    panelHdr.appendChild(closeBtn);
-    panel.appendChild(panelHdr);
-    if (!items.length) {
-      panel.appendChild(el("div", { class: "empty" }, "Nenhuma tarefa neste dia."));
-    } else {
-      const list = el("div", { class: "task-list" });
-      items.forEach(t => list.appendChild(renderTaskCard(t)));
-      panel.appendChild(list);
-    }
-    root.appendChild(panel);
-  }
-}
-
-function makeCalCell(y, m, d, outside) {
-  const date = new Date(y, m, d);
-  const ds = ymd(date);
-  const isSelected = ds === state.calSelectedDate;
-  const cell = el("div", {
-    class: "cal-day" + (outside ? " outside" : "") + (ds === todayISO() ? " today" : "") + (isSelected ? " selected" : "")
-  });
-  cell.appendChild(el("div", { class: "num" }, String(date.getDate())));
-  const items = tasksOnDate(ds);
-  const score = items.reduce((s, t) => s + scoreFor(t), 0);
-  const dot = scoreDotStyle(score);
-  if (dot) {
-    const dotEl = el("div", { class: "cal-dot" });
-    dotEl.style.width = dot.size + "px";
-    dotEl.style.height = dot.size + "px";
-    dotEl.style.background = dot.color;
-    cell.appendChild(dotEl);
-  }
-  cell.addEventListener("click", () => {
-    state.calSelectedDate = state.calSelectedDate === ds ? null : ds;
-    render();
-  });
-  return cell;
-}
-
-/* ===== Month/Year picker ===== */
-
-function openMonthPicker() {
-  state.monthPickerYear = state.calMonth.y;
-  renderMonthPicker();
-  document.getElementById("month-picker-modal").hidden = false;
-}
-function renderMonthPicker() {
-  document.getElementById("year-display").textContent = state.monthPickerYear;
-  const grid = document.getElementById("month-grid");
-  grid.innerHTML = "";
-  const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-  months.forEach((name, i) => {
-    const b = el("button", { type: "button" }, name);
-    if (state.monthPickerYear === state.calMonth.y && i === state.calMonth.m) b.classList.add("active");
-    b.addEventListener("click", () => {
-      state.calMonth = { y: state.monthPickerYear, m: i };
-      document.getElementById("month-picker-modal").hidden = true;
-      render();
-    });
-    grid.appendChild(b);
-  });
-}
-
 /* ===== Shopping ===== */
 
 function renderShopping(root) {
+  root.className = "view view--scrollable";
   const cats = state.shopping.categories;
 
   const toolbar = el("div", { class: "shopping-toolbar" });
@@ -699,6 +693,7 @@ function renderShoppingCategory(cat) {
   const card = el("div", { class: "shopping-category" });
   card.style.setProperty("--cat-color", cat.color);
   card.style.setProperty("--cat-bg", hexToRgba(cat.color, 0.13));
+  card.style.setProperty("--cat-tint", hexToRgba(cat.color, 0.07));
 
   const hdr = el("div", { class: "shopping-cat-header" });
   hdr.addEventListener("click", () => {
@@ -719,8 +714,11 @@ function renderShoppingCategory(cat) {
 
   if (!cat.collapsed) {
     const body = el("div", { class: "shopping-cat-body" });
+
     cat.items.forEach((item, i) => {
       const row = el("div", { class: "shopping-item" + (item.checked ? " checked" : "") });
+      row.style.background = "var(--cat-tint)";
+
       const cb = el("input", { type: "checkbox", class: "styled-check" });
       cb.checked = item.checked;
       cb.addEventListener("change", e => {
@@ -731,24 +729,19 @@ function renderShoppingCategory(cat) {
       });
 
       const nameEl = el("span", { class: "shopping-item-name" }, item.name);
-      nameEl.title = "Clique para editar";
-      nameEl.addEventListener("click", e => {
-        e.stopPropagation();
-        const input = el("input", { type: "text", class: "shopping-item-input", value: item.name, maxlength: "200" });
-        const confirm = () => {
-          const v = input.value.trim();
-          if (v) { cat.items[i].name = v; save(); }
-          render();
-        };
-        input.addEventListener("blur", confirm);
-        input.addEventListener("keydown", ev => {
-          if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
-          if (ev.key === "Escape") { render(); }
-        });
-        nameEl.replaceWith(input);
-        input.focus();
-        input.select();
-      });
+
+      // Long press → inline edit with color + title + OK
+      let longPressTimer = null;
+      const startLongPress = () => {
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          activateItemEdit(cat, i, row, cb);
+        }, 550);
+      };
+      const cancelLongPress = () => { clearTimeout(longPressTimer); longPressTimer = null; };
+      row.addEventListener("touchstart", startLongPress, { passive: true });
+      row.addEventListener("touchend", cancelLongPress, { passive: true });
+      row.addEventListener("touchmove", cancelLongPress, { passive: true });
 
       const rm = el("button", { type: "button", class: "remove-btn" }, "×");
       rm.addEventListener("click", e => {
@@ -786,6 +779,37 @@ function renderShoppingCategory(cat) {
     card.appendChild(body);
   }
   return card;
+}
+
+function activateItemEdit(cat, idx, row, checkboxEl) {
+  // Replace row contents with: [color-dot][name-input][OK btn]
+  row.innerHTML = "";
+
+  const colorDot = el("button", { type: "button", class: "item-edit-color", title: "Editar cor da categoria" });
+  colorDot.style.background = cat.color;
+  colorDot.addEventListener("click", e => {
+    e.stopPropagation();
+    // Open cat modal for this category
+    openCategoryModal(cat.id);
+  });
+
+  const nameInput = el("input", { type: "text", class: "shopping-item-input", value: cat.items[idx].name, maxlength: "200" });
+
+  const okBtn = el("button", { type: "button", class: "primary-btn small-btn" }, "OK");
+  const confirm = () => {
+    const v = nameInput.value.trim();
+    if (v) { cat.items[idx].name = v; save(); }
+    render();
+  };
+  okBtn.addEventListener("click", confirm);
+  nameInput.addEventListener("keydown", ev => {
+    if (ev.key === "Enter") { ev.preventDefault(); confirm(); }
+    if (ev.key === "Escape") { render(); }
+  });
+
+  row.append(colorDot, nameInput, okBtn);
+  nameInput.focus();
+  nameInput.select();
 }
 
 function openCategoryModal(id = null) {
@@ -829,7 +853,6 @@ function saveCategoryModal() {
   }
   save();
   closeCategoryModal();
-  // Auto-select new category for add-item regardless of picker visibility
   if (newId && state.catPickerContext === "add-item") {
     state.addItemDraft.categoryId = newId;
     updateCatSelectDisplay();
@@ -859,9 +882,7 @@ function openAddItemModal() {
   document.getElementById("add-item-modal").hidden = false;
 }
 
-function closeAddItemModal() {
-  document.getElementById("add-item-modal").hidden = true;
-}
+function closeAddItemModal() { document.getElementById("add-item-modal").hidden = true; }
 
 function updateCatSelectDisplay() {
   const cat = state.shopping.categories.find(c => c.id === state.addItemDraft.categoryId);
@@ -919,6 +940,218 @@ function renderCatPickerList() {
   });
 }
 
+/* ===== Notes ===== */
+
+function renderNotes(root) {
+  root.className = "view view--scrollable";
+  const notebooks = state.notes.notebooks;
+
+  const toolbar = el("div", { class: "shopping-toolbar" });
+  const addBtn = el("button", { type: "button", class: "primary-btn shopping-add-btn" }, "+ Novo caderno");
+  addBtn.addEventListener("click", () => openNotebookModal(null));
+  toolbar.appendChild(addBtn);
+  root.appendChild(toolbar);
+
+  if (!notebooks.length) {
+    root.appendChild(el("div", { class: "empty" }, "Nenhum caderno ainda. Crie um para começar."));
+    return;
+  }
+
+  notebooks.forEach(nb => root.appendChild(renderNotebook(nb)));
+}
+
+function renderNotebook(nb) {
+  const card = el("div", { class: "notebook-card" });
+  card.style.setProperty("--nb-color", nb.color);
+  card.style.setProperty("--nb-bg", hexToRgba(nb.color, 0.12));
+
+  const hdr = el("div", { class: "notebook-hdr" });
+  hdr.addEventListener("click", () => {
+    nb.collapsed = !nb.collapsed;
+    save();
+    render();
+  });
+
+  const dot = el("span", { class: "notebook-dot" });
+  dot.style.background = nb.color;
+  const name = el("span", { class: "notebook-name" }, nb.name);
+  name.addEventListener("click", e => { e.stopPropagation(); openNotebookModal(nb.id); });
+
+  const pages = state.notes.pages.filter(p => p.notebookId === nb.id);
+  const count = el("span", { class: "shopping-cat-count" }, `${pages.length} pág.`);
+  const toggle = el("span", { class: "shopping-cat-chevron" }, nb.collapsed ? "▶" : "▼");
+  hdr.append(dot, name, count, toggle);
+  card.appendChild(hdr);
+
+  if (!nb.collapsed) {
+    const body = el("div", { class: "notebook-body" });
+    if (!pages.length) {
+      body.appendChild(el("p", { class: "empty", style: "padding:12px;text-align:center" }, "Sem páginas."));
+    } else {
+      pages.forEach(page => {
+        const row = el("div", { class: "page-row" });
+        const pageIcon = el("span", { class: "page-icon" }, "📄");
+        const pageInfo = el("div", { class: "page-info" });
+        pageInfo.appendChild(el("span", { class: "page-name" }, page.name));
+        if (page.updatedAt) {
+          const d = new Date(page.updatedAt);
+          const fmt = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+          pageInfo.appendChild(el("span", { class: "page-date" }, fmt));
+        }
+        row.append(pageIcon, pageInfo);
+        row.addEventListener("click", () => openNotePage(page.id));
+        body.appendChild(row);
+      });
+    }
+    const addPageBtn = el("button", { type: "button", class: "ghost-btn", style: "width:100%;margin-top:8px;font-size:0.9rem" }, "+ Nova página");
+    addPageBtn.addEventListener("click", e => { e.stopPropagation(); openNotePage(null, nb.id); });
+    body.appendChild(addPageBtn);
+    card.appendChild(body);
+  }
+  return card;
+}
+
+function openNotebookModal(id) {
+  state.editingNotebookId = id;
+  const nb = id ? state.notes.notebooks.find(n => n.id === id) : null;
+  state.editingNotebookDraft = { name: nb?.name || "", color: nb?.color || TAG_COLORS[0] };
+  document.getElementById("notebook-modal-title").textContent = id ? "Editar caderno" : "Novo caderno";
+  document.getElementById("notebook-delete-btn").hidden = !id;
+  document.getElementById("notebook-name").value = state.editingNotebookDraft.name;
+  renderNotebookColorGrid();
+  document.getElementById("notebook-modal").hidden = false;
+}
+
+function closeNotebookModal() {
+  document.getElementById("notebook-modal").hidden = true;
+  state.editingNotebookId = null;
+}
+
+function renderNotebookColorGrid() {
+  const grid = document.getElementById("notebook-color-grid");
+  grid.innerHTML = "";
+  TAG_COLORS.forEach(c => {
+    const b = el("button", { type: "button" });
+    b.style.background = c;
+    if (c === state.editingNotebookDraft.color) b.classList.add("selected");
+    b.addEventListener("click", () => { state.editingNotebookDraft.color = c; renderNotebookColorGrid(); });
+    grid.appendChild(b);
+  });
+}
+
+function saveNotebookModal() {
+  const name = document.getElementById("notebook-name").value.trim();
+  if (!name) { showToast("Informe um nome"); return; }
+  if (state.editingNotebookId) {
+    const nb = state.notes.notebooks.find(n => n.id === state.editingNotebookId);
+    if (nb) { nb.name = name; nb.color = state.editingNotebookDraft.color; }
+  } else {
+    state.notes.notebooks.push({ id: uid(), name, color: state.editingNotebookDraft.color, collapsed: false });
+  }
+  save();
+  closeNotebookModal();
+  render();
+}
+
+function deleteNotebookModal() {
+  if (!confirm("Excluir este caderno e todas as suas páginas?")) return;
+  const id = state.editingNotebookId;
+  state.notes.notebooks = state.notes.notebooks.filter(n => n.id !== id);
+  state.notes.pages = state.notes.pages.filter(p => p.notebookId !== id);
+  save();
+  closeNotebookModal();
+  render();
+}
+
+function openNotePage(pageId, notebookId = null) {
+  state.editingPageId = pageId;
+  state.pagePreviewMode = false;
+  const page = pageId ? state.notes.pages.find(p => p.id === pageId) : null;
+  document.getElementById("page-title-input").value = page?.name || "";
+  document.getElementById("page-content-input").value = page?.content || "";
+  document.getElementById("page-preview").hidden = true;
+  document.getElementById("page-editor").hidden = false;
+  document.getElementById("page-preview-btn").textContent = "Pré-vis.";
+  // Store notebookId for new pages
+  document.getElementById("notes-page-modal").dataset.notebookId = notebookId || page?.notebookId || "";
+  document.getElementById("notes-page-modal").hidden = false;
+}
+
+function closeNotePage() {
+  document.getElementById("notes-page-modal").hidden = true;
+  state.editingPageId = null;
+}
+
+function togglePagePreview() {
+  state.pagePreviewMode = !state.pagePreviewMode;
+  const preview = document.getElementById("page-preview");
+  const editor = document.getElementById("page-editor");
+  const btn = document.getElementById("page-preview-btn");
+  if (state.pagePreviewMode) {
+    preview.innerHTML = renderMarkdown(document.getElementById("page-content-input").value);
+    preview.hidden = false;
+    editor.hidden = true;
+    btn.textContent = "Editar";
+  } else {
+    preview.hidden = true;
+    editor.hidden = false;
+    btn.textContent = "Pré-vis.";
+  }
+}
+
+function saveNotePage() {
+  const name = document.getElementById("page-title-input").value.trim() || "Sem título";
+  const content = document.getElementById("page-content-input").value;
+  const notebookId = document.getElementById("notes-page-modal").dataset.notebookId;
+
+  if (state.editingPageId) {
+    const page = state.notes.pages.find(p => p.id === state.editingPageId);
+    if (page) { page.name = name; page.content = content; page.updatedAt = new Date().toISOString(); }
+  } else {
+    if (!notebookId) { showToast("Caderno não encontrado"); return; }
+    state.notes.pages.push({ id: uid(), notebookId, name, content, updatedAt: new Date().toISOString() });
+  }
+  save();
+  closeNotePage();
+  if (state.view === "notes") render();
+  showToast("Página salva");
+}
+
+function deleteNotePage() {
+  if (!state.editingPageId) return;
+  if (!confirm("Excluir esta página?")) return;
+  state.notes.pages = state.notes.pages.filter(p => p.id !== state.editingPageId);
+  save();
+  closeNotePage();
+  if (state.view === "notes") render();
+}
+
+function renderMarkdown(text) {
+  if (!text) return "";
+  let html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Headings (process before line breaks)
+  html = html.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+  html = html.replace(/^## (.+)$/gm, "<h2>$1</h2>");
+  html = html.replace(/^# (.+)$/gm, "<h1>$1</h1>");
+
+  // Lists: consecutive lines starting with - become <ul><li>
+  html = html.replace(/^- (.+)$/gm, "<li>$1</li>");
+  html = html.replace(/(<li>.*<\/li>(\n|$))+/g, match => "<ul>" + match.replace(/\n$/, "") + "</ul>");
+
+  // Inline
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+  // Line breaks (skip inside tags)
+  html = html.replace(/(?<![>])\n/g, "<br>");
+
+  return html;
+}
+
 /* ===== Animations ===== */
 
 function playBurst(anchor) {
@@ -949,7 +1182,6 @@ async function toggleComplete(id) {
   const t = state.tasks.find(x => x.id === id);
   if (!t) return;
 
-  // unchecking a completed oneoff: instant
   if (t.type === "oneoff" && t.completed) {
     t.completed = false;
     t.completedAt = null;
@@ -1312,7 +1544,7 @@ function deleteTagEdit() {
   render();
 }
 
-/* ===== Per-task tag selector (acessado via click em pill no card) ===== */
+/* ===== Per-task tag selector ===== */
 
 function openTaskTagsSelector(taskId) {
   state.editingTagsTaskId = taskId;
@@ -1367,12 +1599,8 @@ function createTaskTag() {
   const color = TAG_COLORS.find(c => !used.has(c)) || TAG_COLORS[state.tags.length % 16];
   const newTag = { id: uid(), name, color };
   state.tags.push(newTag);
-  // attach to current task
   const t = state.tasks.find(x => x.id === state.editingTagsTaskId);
-  if (t) {
-    t.tags = t.tags || [];
-    t.tags.push(newTag.id);
-  }
+  if (t) { t.tags = t.tags || []; t.tags.push(newTag.id); }
   input.value = "";
   save();
   renderTaskTagsSelectorList();
@@ -1635,8 +1863,6 @@ function buildScheduledNotifications() {
 function nextOccurrenceOfTime(h, m, addDays = 0) {
   const d = new Date();
   d.setHours(h, m, 0, 0);
-  // Do NOT advance past times for addDays=0: checkDueNotifications fires
-  // missed digest when user opens app after the scheduled hour.
   d.setDate(d.getDate() + addDays);
   return d.getTime();
 }
@@ -1679,7 +1905,6 @@ function checkDueNotifications() {
   for (const id of [...notified]) {
     if (!allIds.has(id)) {
       if (id.startsWith("d|")) {
-        // digest ID: d|kind|YYYY-MM-DD — clean up if older than 2 days
         const dateStr = id.split("|")[2];
         if (dateStr && diffDays(todayISO(), dateStr) > 2) notified.delete(id);
       } else {
@@ -1699,15 +1924,12 @@ function openSettingsModal() {
   document.getElementById("settings-modal").hidden = false;
 }
 
-function closeSettingsModal() {
-  document.getElementById("settings-modal").hidden = true;
-}
+function closeSettingsModal() { document.getElementById("settings-modal").hidden = true; }
 
 function renderSettingsBody() {
   const body = document.getElementById("settings-body");
   body.innerHTML = "";
 
-  // --- Tema ---
   const themeField = el("fieldset", { class: "field" });
   themeField.appendChild(el("legend", {}, "Tema"));
   const themeRow = el("div", { class: "importance-row" });
@@ -1719,7 +1941,6 @@ function renderSettingsBody() {
       state.appTheme = val;
       applyTheme();
       save();
-      // Update chip styles without full re-render
       themeRow.querySelectorAll(".imp-chip").forEach(c => c.removeAttribute("data-imp"));
       lbl2.dataset.imp = "sel";
     });
@@ -1729,7 +1950,6 @@ function renderSettingsBody() {
   themeField.appendChild(themeRow);
   body.appendChild(themeField);
 
-  // --- Notificações diárias ---
   const notifField = el("fieldset", { class: "field" });
   notifField.appendChild(el("legend", {}, "Notificações diárias"));
 
@@ -1755,7 +1975,6 @@ function renderSettingsBody() {
     notifField.appendChild(row);
   });
 
-  // Adicionar novo horário
   const addRow = el("div", { class: "notif-slot-row" });
   const newTime = el("input", { type: "time", value: "09:00", class: "notif-time-input" });
   const addBtn = el("button", { type: "button", class: "ghost-btn" }, "+ Adicionar");
@@ -1771,7 +1990,6 @@ function renderSettingsBody() {
   addRow.append(newTime, addBtn);
   notifField.appendChild(addRow);
 
-  // Testar agora
   const testBtn = el("button", { type: "button", class: "ghost-btn", style: "margin-top:8px;width:100%" }, "Testar notificação agora");
   testBtn.addEventListener("click", async () => {
     if (!(await ensureNotif())) { showToast("Permissão negada"); return; }
@@ -1781,6 +1999,30 @@ function renderSettingsBody() {
   });
   notifField.appendChild(testBtn);
   body.appendChild(notifField);
+}
+
+/* ===== Changelog modal ===== */
+
+function openChangelogModal() {
+  const changes = CHANGELOG[APP_VERSION] || [];
+  const checks = getChangelogChecks();
+  document.getElementById("changelog-title").textContent = `Novidades v${APP_VERSION}`;
+  const body = document.getElementById("changelog-body");
+  body.innerHTML = "";
+  changes.forEach((item, i) => {
+    const key = `${APP_VERSION}:${i}`;
+    const row = el("label", { class: "changelog-item" });
+    const cb = el("input", { type: "checkbox" });
+    cb.checked = checks.has(key);
+    cb.addEventListener("change", () => {
+      if (cb.checked) checks.add(key); else checks.delete(key);
+      saveChangelogChecks(checks);
+    });
+    const txt = document.createTextNode(" " + item);
+    row.append(cb, txt);
+    body.appendChild(row);
+  });
+  document.getElementById("changelog-modal").hidden = false;
 }
 
 /* ===== util ===== */
@@ -1793,31 +2035,37 @@ function showToast(msg, ms = 2200) {
   showToast._t = setTimeout(() => { t.hidden = true; }, ms);
 }
 
+function closeLastModal() {
+  const order = [
+    "tag-edit-modal", "tags-modal", "modal", "renew-modal",
+    "quick-date-modal", "tag-select-modal", "cat-modal",
+    "add-item-modal", "cat-picker-modal", "settings-modal",
+    "notes-page-modal", "notebook-modal", "day-tasks-modal", "changelog-modal",
+  ];
+  for (const id of order) {
+    const m = document.getElementById(id);
+    if (m && !m.hidden) { m.hidden = true; return true; }
+  }
+  return false;
+}
+
 /* ===== wiring ===== */
 
 function setupUI() {
+  // Version badge → changelog
   const vb = document.getElementById("version-badge");
   if (vb) {
     vb.textContent = "v" + APP_VERSION;
-    vb.addEventListener("click", () => {
-      const existing = document.getElementById("version-popover");
-      if (existing) { existing.remove(); return; }
-      const pop = document.createElement("div");
-      pop.id = "version-popover";
-      pop.className = "version-popover";
-      const changes = CHANGELOG[APP_VERSION] || [];
-      const list = changes.map(c => `<li>${c}</li>`).join("");
-      pop.innerHTML = `<strong>Novidades em v${APP_VERSION}</strong><ul>${list}</ul>`;
-      vb.appendChild(pop);
-      const closePopover = e => {
-        if (!vb.contains(e.target)) {
-          document.getElementById("version-popover")?.remove();
-          document.removeEventListener("click", closePopover);
-        }
-      };
-      setTimeout(() => document.addEventListener("click", closePopover), 10);
-    });
+    vb.addEventListener("click", openChangelogModal);
   }
+
+  // Close changelog
+  document.getElementById("close-changelog").addEventListener("click", () => {
+    document.getElementById("changelog-modal").hidden = true;
+  });
+  document.getElementById("changelog-modal").addEventListener("click", e => {
+    if (e.target.id === "changelog-modal") document.getElementById("changelog-modal").hidden = true;
+  });
 
   // Settings modal (logo click)
   document.querySelector(".brand").addEventListener("click", openSettingsModal);
@@ -1921,18 +2169,12 @@ function setupUI() {
   document.getElementById("quick-date-save").addEventListener("click", quickDateSave);
   document.getElementById("quick-date-clear").addEventListener("click", quickDateClear);
 
-  // Month picker
-  document.getElementById("close-month-picker").addEventListener("click", () => {
-    document.getElementById("month-picker-modal").hidden = true;
+  // Day tasks modal
+  document.getElementById("close-day-tasks").addEventListener("click", () => {
+    document.getElementById("day-tasks-modal").hidden = true;
   });
-  document.getElementById("month-picker-modal").addEventListener("click", e => {
-    if (e.target.id === "month-picker-modal") document.getElementById("month-picker-modal").hidden = true;
-  });
-  document.getElementById("year-prev").addEventListener("click", () => {
-    state.monthPickerYear -= 1; renderMonthPicker();
-  });
-  document.getElementById("year-next").addEventListener("click", () => {
-    state.monthPickerYear += 1; renderMonthPicker();
+  document.getElementById("day-tasks-modal").addEventListener("click", e => {
+    if (e.target.id === "day-tasks-modal") document.getElementById("day-tasks-modal").hidden = true;
   });
 
   // Per-task tag selector
@@ -1945,22 +2187,20 @@ function setupUI() {
     if (e.key === "Enter") { e.preventDefault(); createTaskTag(); }
   });
 
-  // Swipe to change tabs
-  const swipeTabs = ["home", "calendar", "shopping"];
-  let touchStartX = 0, touchStartY = 0;
-  const viewEl = document.getElementById("view");
-  viewEl.addEventListener("touchstart", e => {
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-  }, { passive: true });
-  viewEl.addEventListener("touchend", e => {
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    const dy = e.changedTouches[0].clientY - touchStartY;
-    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
-    const cur = swipeTabs.indexOf(state.view);
-    if (dx < 0 && cur < swipeTabs.length - 1) setView(swipeTabs[cur + 1]);
-    if (dx > 0 && cur > 0) setView(swipeTabs[cur - 1]);
-  }, { passive: true });
+  // Notes modals
+  document.getElementById("close-notebook-modal").addEventListener("click", closeNotebookModal);
+  document.getElementById("notebook-modal").addEventListener("click", e => {
+    if (e.target.id === "notebook-modal") closeNotebookModal();
+  });
+  document.getElementById("notebook-save-btn").addEventListener("click", saveNotebookModal);
+  document.getElementById("notebook-delete-btn").addEventListener("click", deleteNotebookModal);
+
+  document.getElementById("close-page-modal").addEventListener("click", closeNotePage);
+  document.getElementById("notes-page-modal").addEventListener("click", e => {
+    if (e.target.id === "notes-page-modal") closeNotePage();
+  });
+  document.getElementById("page-save-btn").addEventListener("click", saveNotePage);
+  document.getElementById("page-preview-btn").addEventListener("click", togglePagePreview);
 
   // Notification toggle
   document.querySelectorAll('input[name="notif-enabled"]').forEach(r => {
@@ -1968,6 +2208,50 @@ function setupUI() {
       document.getElementById("notif-details").hidden = r.value === "no";
     });
   });
+
+  // Swipe to change tabs
+  const swipeTabs = ["home", "shopping", "notes"];
+  let touchStartX = 0, touchStartY = 0, touchStartEdge = false;
+  const viewEl = document.getElementById("view");
+  const fogEl = document.getElementById("swipe-fog");
+
+  viewEl.addEventListener("touchstart", e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    touchStartEdge = touchStartX > window.innerWidth * 0.85;
+  }, { passive: true });
+
+  viewEl.addEventListener("touchmove", e => {
+    if (touchStartEdge) return; // back gesture, don't show fog
+    const dx = e.touches[0].clientX - touchStartX;
+    const absDx = Math.abs(dx);
+    if (absDx < 8) { fogEl.style.opacity = "0"; return; }
+    const opacity = Math.min(absDx / 150, 1) * 0.15;
+    fogEl.style.opacity = String(opacity);
+    const dir = dx > 0 ? "to right" : "to left";
+    fogEl.style.background = `linear-gradient(${dir}, var(--accent), transparent)`;
+  }, { passive: true });
+
+  viewEl.addEventListener("touchend", e => {
+    fogEl.style.opacity = "0";
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
+
+    // Back gesture: started from right edge, dragged left
+    if (touchStartEdge && dx < -50) {
+      if (!closeLastModal()) {
+        showToast("Deseja sair do Fluxo?");
+      }
+      return;
+    }
+
+    if (!touchStartEdge) {
+      const cur = swipeTabs.indexOf(state.view);
+      if (dx < 0 && cur < swipeTabs.length - 1) setView(swipeTabs[cur + 1]);
+      if (dx > 0 && cur > 0) setView(swipeTabs[cur - 1]);
+    }
+  }, { passive: true });
 }
 
 async function registerSW() {

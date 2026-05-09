@@ -20,14 +20,17 @@
   </header>
 
   <nav class="tabs" role="tablist">
-    <button class="tab active" data-view="home" role="tab">Início</button>
-    <button class="tab" data-view="calendar" role="tab">Calendário</button>
+    <button class="tab active" data-view="home" role="tab">Tarefas</button>
     <button class="tab" data-view="shopping" role="tab">Compras</button>
+    <button class="tab" data-view="notes" role="tab">Notas</button>
   </nav>
 
   <main id="view" class="view" aria-live="polite"></main>
 
   <button id="add-btn" class="fab" aria-label="Adicionar tarefa">+</button>
+
+  <!-- Swipe fog overlay -->
+  <div id="swipe-fog"></div>
 
   <!-- Modal: Tarefa -->
   <div id="modal" class="modal" hidden>
@@ -256,24 +259,6 @@
     </div>
   </div>
 
-  <!-- Month/Year picker for calendar -->
-  <div id="month-picker-modal" class="modal popover-modal" hidden>
-    <div class="modal-content small">
-      <header class="modal-header">
-        <h2>Escolher mês</h2>
-        <button id="close-month-picker" class="icon-btn" aria-label="Fechar">×</button>
-      </header>
-      <div class="task-form">
-        <div class="year-row">
-          <button type="button" id="year-prev" class="cal-nav-btn">‹</button>
-          <span id="year-display" class="year-display">2026</span>
-          <button type="button" id="year-next" class="cal-nav-btn">›</button>
-        </div>
-        <div id="month-grid" class="month-grid"></div>
-      </div>
-    </div>
-  </div>
-
   <!-- Modal: Nova/Editar Categoria de Compras -->
   <div id="cat-modal" class="modal" hidden>
     <div class="modal-content small">
@@ -343,6 +328,73 @@
         <button id="close-settings" class="icon-btn" aria-label="Fechar">×</button>
       </header>
       <div id="settings-body" class="task-form"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Changelog da versão -->
+  <div id="changelog-modal" class="modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2 id="changelog-title">Novidades</h2>
+        <button id="close-changelog" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <p class="hint" style="margin-top:0">Marque o que você já testou nesta versão:</p>
+        <div id="changelog-body" class="changelog-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Tarefas do dia (calendário embutido) -->
+  <div id="day-tasks-modal" class="modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2 id="day-tasks-title">Tarefas do dia</h2>
+        <button id="close-day-tasks" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div id="day-tasks-body" class="task-form" style="padding-bottom:16px"></div>
+    </div>
+  </div>
+
+  <!-- Modal: Caderno (Notas) -->
+  <div id="notebook-modal" class="modal" hidden>
+    <div class="modal-content small">
+      <header class="modal-header">
+        <h2 id="notebook-modal-title">Novo caderno</h2>
+        <button id="close-notebook-modal" class="icon-btn" aria-label="Fechar">×</button>
+      </header>
+      <div class="task-form">
+        <label class="field">
+          <span>Nome</span>
+          <input type="text" id="notebook-name" maxlength="60" placeholder="Ex: Receitas, Ideias...">
+        </label>
+        <fieldset class="field">
+          <legend>Cor</legend>
+          <div id="notebook-color-grid" class="tag-color-grid"></div>
+        </fieldset>
+        <div class="modal-actions">
+          <button type="button" id="notebook-delete-btn" class="danger-btn" hidden>Excluir</button>
+          <button type="button" id="notebook-save-btn" class="primary-btn">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Página de nota -->
+  <div id="notes-page-modal" class="modal" hidden>
+    <div class="modal-content notes-page-content">
+      <header class="modal-header">
+        <input type="text" id="page-title-input" class="page-title-input" placeholder="Título da página" maxlength="100">
+        <div class="page-modal-actions">
+          <button type="button" id="page-preview-btn" class="ghost-btn small">Pré-vis.</button>
+          <button type="button" id="page-save-btn" class="primary-btn small-btn">Salvar</button>
+          <button id="close-page-modal" class="icon-btn" aria-label="Fechar">×</button>
+        </div>
+      </header>
+      <div id="page-editor" class="page-editor">
+        <textarea id="page-content-input" class="page-textarea" placeholder="Escreva aqui... Suporta **negrito**, *itálico*, # Título, - lista"></textarea>
+      </div>
+      <div id="page-preview" class="page-preview" hidden></div>
     </div>
   </div>
 

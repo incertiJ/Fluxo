@@ -100,6 +100,15 @@ Ao final de uma sequência relevante de mudanças (antes de o usuário fechar a 
 - Anotar novas dúvidas em aberto
 - Limpar o que ficou obsoleto
 
+### 14. Workflow de inputs do usuário (aplicar a TODOS os inputs)
+Antes de implementar qualquer mudança não-trivial:
+1. **Avalie** o input: qual o impacto real? afeta quantos arquivos/linhas? há ambiguidade?
+2. **Pergunte** tudo o que for necessário antes de codar: UX, comportamento em edge cases, layout, design, dados — prefira 5+ perguntas a refação.
+3. **Proponha um plano** em bullets (estrutura lógica, arquivos afetados, decisões de design) antes de escrever código.
+4. **Aguarde "ok prossiga"** explícito antes de codar.
+
+Esta regra é o comportamento padrão para qualquer nova feature, refactor ou mudança visual significativa.
+
 ---
 
 ## Decisões arquiteturais já tomadas (não revisitar sem motivo)

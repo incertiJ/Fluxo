@@ -1692,6 +1692,7 @@ input[type="radio"]:checked::after {
   height: 96dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .notes-page-content .modal-header {
@@ -1882,9 +1883,9 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
 .page-tool-color-swatch:hover { transform: scale(1.2); border-color: var(--text); }
 .page-tool-color-swatch--default { border-color: var(--border) !important; }
 
-/* Notebook lines — baseline sits ~3px above each ruling line */
+/* Notebook lines — baseline sits ~2px above each ruling line */
 /* With line-height:2em (32px) and typical sans-serif metrics:
-   baseline ≈ padding-top + 21px; line at 31px → padding-top ≈ 9px gives ~1px gap */
+   baseline ≈ padding-top + 21px; line at 31px → padding-top ≈ 8px gives ~2px gap */
 .page-textarea {
   background-image: repeating-linear-gradient(
     to bottom,
@@ -1896,7 +1897,7 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
   background-size: 100% 2em;
   background-attachment: local;
   line-height: 2em;
-  padding-top: 9px;
+  padding-top: 8px;
 }
 
 /* ===== Notes page save FAB ===== */
@@ -1949,6 +1950,14 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
   height: 64px;
   border-radius: 16px;
   margin-bottom: 4px;
+}
+
+.auth-greeting {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0;
+  text-align: center;
 }
 
 .auth-title {
@@ -2125,7 +2134,7 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
 .delete-all-btn {
   display: block;
   width: calc(100% - 32px);
-  margin: 2px 16px 8px;
+  margin: 0 16px 8px;
   padding: 9px;
   background: transparent;
   border: 1.5px solid var(--imp-crit);

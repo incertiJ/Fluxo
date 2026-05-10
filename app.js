@@ -1,12 +1,25 @@
-/* Fluxo v6.03 */
+/* Fluxo v6.4 */
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.03";
+const APP_VERSION = "6.4";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "6.4": [
+    "Design: nova paleta de 14 cores pastéis (7 famílias × 2 tons)",
+    "Notas: cores do editor atualizadas — vermelho, azul, verde, amarelo (tons suaves)",
+    "Notas: toolbar e cabeçalho sempre visíveis ao topo, mesmo com teclado aberto",
+    "Notas: texto posicionado 2px acima da linha do caderno",
+    "Notas: auto-save ao voltar com gesto (popstate); usa 'Sem título' se vazio",
+    "Tarefas: botão 'Apagar todas' sem margem extra acima da última tarefa",
+    "Tarefas: fog de aba suprimido durante deslize de deletar tarefa feita",
+    "Tudo: long press reduzido para 300ms (sincroniza com vibração Pixel)",
+    "Login: saudação por horário (Bom dia/Boa tarde/Boa noite) com nome configurável",
+    "Login: nome configurável via Configurações (clicar na logo/marca)",
+    "Notificações: remoção do ícone de badge (mantém apenas ícone do Fluxo à esquerda)",
+  ],
   "6.03": [
     "Tarefas: calendário em container colapsável próprio, expandido por padrão",
     "Tarefas: painel de filtros removido definitivamente",
@@ -75,19 +88,22 @@ const CHANGELOG = {
 };
 
 const TAG_COLORS = [
-  "#a3d5d2", "#b8d9c4", "#c8d8b0", "#dee2a8",
-  "#ead8a8", "#f0c8a0", "#e8a8a0", "#e8b0c8",
-  "#c8b0d8", "#b4b8e0", "#a8c8e0", "#a8d4d8",
-  "#c8a8a0", "#d8c4b0", "#a8b8c4", "#d8d4c0"
+  "#9ecfc8", "#c4e8e4",  // teal
+  "#9ec4e0", "#c0d8f0",  // azul celeste
+  "#a8d4b4", "#c8ead4",  // verde menta
+  "#e0d490", "#f0e8bc",  // amarelo
+  "#eec4a0", "#f8dcc4",  // pêssego
+  "#e8a8a8", "#f4d0d0",  // rosa
+  "#c4b0d8", "#ddd0ec",  // lavanda
 ];
 
 const DEFAULT_TAGS = [
-  { name: "Limpeza", color: "#b8d9c4" },
-  { name: "Viagem", color: "#a8c8e0" },
-  { name: "Burocracia", color: "#d8c4b0" },
-  { name: "Saúde", color: "#e8a8a0" },
-  { name: "Finanças", color: "#d8d4c0" },
-  { name: "Compras", color: "#c8b0d8" }
+  { name: "Limpeza", color: "#a8d4b4" },
+  { name: "Viagem", color: "#9ec4e0" },
+  { name: "Burocracia", color: "#e0d490" },
+  { name: "Saúde", color: "#e8a8a8" },
+  { name: "Finanças", color: "#9ecfc8" },
+  { name: "Compras", color: "#c4b0d8" }
 ];
 
 const IMP_WEIGHT = { 1: 1, 2: 6, 3: 10, 4: 30 };
@@ -127,6 +143,7 @@ const state = {
   editingPageId: null,
   pagePreviewMode: false,
   _lastView: null,
+  userName: "",
 };
 
 /* ===== persistence ===== */
@@ -158,6 +175,7 @@ function load() {
       state.notes = data.notes || { notebooks: [], pages: [] };
       state.notifSchedule = data.notifSchedule || [{ h: 9, m: 0 }, { h: 22, m: 0 }];
       state.appTheme = data.appTheme || "auto";
+      state.userName = data.userName || "";
     }
   } catch {}
   if (!state.tags.length) {
@@ -172,6 +190,7 @@ function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     tasks: state.tasks, tags: state.tags, shopping: state.shopping,
     notes: state.notes, notifSchedule: state.notifSchedule, appTheme: state.appTheme,
+    userName: state.userName,
   }));
 }
 
@@ -302,12 +321,9 @@ function setView(v) {
 }
 
 function render() {
-  // Hide page-save-fab whenever the page modal is not visible
+  // Tear down page-save-fab (removes visualViewport listener) when notes modal is not visible
   const noteModal = document.getElementById("notes-page-modal");
-  if (noteModal && noteModal.hidden) {
-    const pageFab = document.getElementById("page-save-fab");
-    if (pageFab) pageFab.style.display = "none";
-  }
+  if (noteModal && noteModal.hidden) teardownPageSaveFab();
 
   const view = document.getElementById("view");
   const fab = document.getElementById("add-btn");
@@ -876,7 +892,7 @@ function renderShoppingCategory(cat) {
 
   // Long press = edit category
   let catLp = null;
-  hdr.addEventListener("touchstart", () => { catLp = setTimeout(() => { catLp = null; openCategoryModal(cat.id); }, 600); }, { passive: true });
+  hdr.addEventListener("touchstart", () => { catLp = setTimeout(() => { catLp = null; openCategoryModal(cat.id); }, 300); }, { passive: true });
   hdr.addEventListener("touchend", () => { clearTimeout(catLp); catLp = null; }, { passive: true });
   hdr.addEventListener("touchmove", () => { clearTimeout(catLp); catLp = null; }, { passive: true });
 
@@ -1152,7 +1168,7 @@ function renderNotebook(nb) {
 
   // Long press = edit notebook
   let nbLp = null;
-  hdr.addEventListener("touchstart", () => { nbLp = setTimeout(() => { nbLp = null; openNotebookModal(nb.id); }, 600); }, { passive: true });
+  hdr.addEventListener("touchstart", () => { nbLp = setTimeout(() => { nbLp = null; openNotebookModal(nb.id); }, 300); }, { passive: true });
   hdr.addEventListener("touchend", () => { clearTimeout(nbLp); nbLp = null; }, { passive: true });
   hdr.addEventListener("touchmove", () => { clearTimeout(nbLp); nbLp = null; }, { passive: true });
 
@@ -1284,16 +1300,24 @@ function setupPageSaveFab() {
   fab.style.display = "flex";
   if (window.visualViewport) {
     _pageSaveFabVVListener = () => {
-      const keyboardOpen = window.visualViewport.height < window.innerHeight * 0.75;
+      const vh = window.visualViewport.height;
+      const keyboardOpen = vh < window.innerHeight * 0.75;
       fab.style.display = keyboardOpen ? "none" : "flex";
+      // Shrink modal to visible area so header+toolbar stay at top
+      const modalContent = document.querySelector(".notes-page-content");
+      if (modalContent) modalContent.style.height = Math.round(vh * 0.96) + "px";
     };
     window.visualViewport.addEventListener("resize", _pageSaveFabVVListener);
+    _pageSaveFabVVListener(); // apply immediately
   }
 }
 
 function teardownPageSaveFab() {
   const fab = document.getElementById("page-save-fab");
   if (fab) fab.style.display = "none";
+  // Reset modal height to CSS default
+  const modalContent = document.querySelector(".notes-page-content");
+  if (modalContent) modalContent.style.height = "";
   if (_pageSaveFabVVListener && window.visualViewport) {
     window.visualViewport.removeEventListener("resize", _pageSaveFabVVListener);
     _pageSaveFabVVListener = null;
@@ -1357,13 +1381,12 @@ function renderMarkdown(text) {
 
 /* ===== Notes page toolbar ===== */
 
-// Colors for notes editor: 4 from TAG_COLORS + default (--text)
 const EDITOR_COLORS = [
   { hex: "default", label: "Padrão" },
-  { hex: "#b8d9c4", label: "Verde menta" },
-  { hex: "#f0c8a0", label: "Laranja pêssego" },
-  { hex: "#a8c8e0", label: "Azul bebê" },
-  { hex: "#c8b0d8", label: "Lilás" },
+  { hex: "#d47878", label: "Vermelho" },
+  { hex: "#6a9ec8", label: "Azul" },
+  { hex: "#68b888", label: "Verde" },
+  { hex: "#c8a040", label: "Amarelo" },
 ];
 
 function setupPageToolbar() {
@@ -2310,6 +2333,13 @@ function renderSettingsBody() {
   const body = document.getElementById("settings-body");
   body.innerHTML = "";
 
+  const nameField = el("label", { class: "field" });
+  nameField.appendChild(el("span", {}, "Como prefere ser chamado?"));
+  const nameInput = el("input", { type: "text", value: state.userName, placeholder: "Seu nome", maxlength: "40" });
+  nameInput.addEventListener("input", () => { state.userName = nameInput.value.trim(); save(); });
+  nameField.appendChild(nameInput);
+  body.appendChild(nameField);
+
   const themeField = el("fieldset", { class: "field" });
   themeField.appendChild(el("legend", {}, "Tema"));
   const themeRow = el("div", { class: "importance-row" });
@@ -2443,7 +2473,14 @@ function closeLastModal() {
   ];
   for (const id of order) {
     const m = document.getElementById(id);
-    if (m && !m.hidden) { m.hidden = true; return true; }
+    if (m && !m.hidden) {
+      if (id === "notes-page-modal") {
+        saveNotePage(); // auto-save; also closes modal and shows toast
+      } else {
+        m.hidden = true;
+      }
+      return true;
+    }
   }
   return false;
 }
@@ -2626,6 +2663,7 @@ function setupUI() {
   }, { passive: true });
 
   viewEl.addEventListener("touchmove", e => {
+    if (touchStartInDoneCard) { fogEl.style.opacity = "0"; return; }
     const dx = e.touches[0].clientX - touchStartX;
     const absDx = Math.abs(dx);
     if (absDx < 8) { fogEl.style.opacity = "0"; return; }
@@ -2648,6 +2686,13 @@ function setupUI() {
 }
 
 /* ===== Auth (PIN + WebAuthn) ===== */
+
+function timeGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Bom dia";
+  if (h < 18) return "Boa tarde";
+  return "Boa noite";
+}
 
 function loadAuth() {
   try { return JSON.parse(localStorage.getItem(AUTH_KEY) || "null"); }
@@ -2713,6 +2758,7 @@ function renderPinSetup(onSuccess) {
   screen.innerHTML = "";
   const wrap = el("div", { class: "auth-wrap" });
   const logo = el("img", { src: "./icon.svg", class: "auth-logo", alt: "" });
+  const greeting = el("p", { class: "auth-greeting" }, timeGreeting() + "!");
   const title = el("h2", { class: "auth-title" }, "Criar PIN");
   const hint = el("p", { class: "auth-hint" }, "Escolha um PIN de 4 dígitos para proteger o Fluxo.");
 
@@ -2758,7 +2804,7 @@ function renderPinSetup(onSuccess) {
   };
   const onDelete = () => { if (currentPin.length > 0) { currentPin = currentPin.slice(0, -1); update(); } };
 
-  wrap.append(logo, title, hint, dotsEl, buildAuthPad(onDigit, onDelete));
+  wrap.append(logo, greeting, title, hint, dotsEl, buildAuthPad(onDigit, onDelete));
   screen.appendChild(wrap);
 }
 
@@ -2767,7 +2813,8 @@ function renderPinEntry(auth, onSuccess) {
   screen.innerHTML = "";
   const wrap = el("div", { class: "auth-wrap" });
   const logo = el("img", { src: "./icon.svg", class: "auth-logo", alt: "" });
-  const title = el("h2", { class: "auth-title" }, "Bem-vindo");
+  const greetingText = state.userName ? `${timeGreeting()}, ${state.userName}` : timeGreeting();
+  const greeting = el("p", { class: "auth-greeting" }, greetingText);
   const hint = el("p", { class: "auth-hint" }, "Digite seu PIN para entrar.");
 
   let currentPin = "";
@@ -2816,7 +2863,7 @@ function renderPinEntry(auth, onSuccess) {
   };
   const onDelete = () => { if (currentPin.length > 0) { currentPin = currentPin.slice(0, -1); update(); } };
 
-  wrap.append(logo, title, hint, dotsEl, buildAuthPad(onDigit, onDelete, tryBio));
+  wrap.append(logo, greeting, hint, dotsEl, buildAuthPad(onDigit, onDelete, tryBio));
   screen.appendChild(wrap);
 
   // Auto-trigger biometric on entry

@@ -1,4 +1,4 @@
-const CACHE = "fluxo-v12";
+const CACHE = "fluxo-v13";
 const NOTIF_CACHE = "fluxo-notif";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js",
@@ -74,7 +74,6 @@ self.addEventListener("message", e => {
           body: item.body,
           tag: item.id,
           icon: notifIcon,
-          badge: notifIcon,
         }).catch(() => {});
       }
     }
@@ -94,7 +93,6 @@ function rescheduleAll(items) {
         body: item.body,
         tag: item.id,
         icon: notifIcon,
-        badge: notifIcon,
       });
       timers.delete(item.id);
     }, delay);

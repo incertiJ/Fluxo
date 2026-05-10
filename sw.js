@@ -8,6 +8,7 @@ const ASSETS = [
 const timers = new Map();
 let scheduledItems = [];
 let notifIcon = "./icon.svg";
+let notifBadge = "./icon.svg";
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
@@ -65,6 +66,7 @@ self.addEventListener("message", e => {
   if (data.type === "schedule") {
     scheduledItems = data.items || [];
     if (data.icon) notifIcon = data.icon;
+    if (data.badge) notifBadge = data.badge;
     persistItems(scheduledItems);
     // Show any items that are already past-due immediately
     const now = Date.now();
@@ -74,6 +76,7 @@ self.addEventListener("message", e => {
           body: item.body,
           tag: item.id,
           icon: notifIcon,
+          badge: notifBadge,
         }).catch(() => {});
       }
     }
@@ -93,6 +96,7 @@ function rescheduleAll(items) {
         body: item.body,
         tag: item.id,
         icon: notifIcon,
+        badge: notifBadge,
       });
       timers.delete(item.id);
     }, delay);

@@ -1686,10 +1686,12 @@ input[type="radio"]:checked::after {
 /* ===== Notes page modal ===== */
 
 .notes-page-content {
-  max-height: 96vh;
-  max-height: 96dvh;
-  height: 96vh;
-  height: 96dvh;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  border-radius: 0;
+  animation: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;

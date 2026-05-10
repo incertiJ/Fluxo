@@ -12,13 +12,13 @@ Combina dois papéis:
 
 **Fluxo** — PWA estático (HTML/CSS/JS puro, sem build) de gestão pessoal: tarefas, compras, notas. Tema pastel "Calm / Natural / Orgânico". Storage em `localStorage`. Sem backend.
 
-**Repo**: `incertij/test-claude`
-**Branch de trabalho atual**: `claude/fix-mobile-cache-update-z3LsR`
+**Repo**: `incertij/fluxo`
+**Branch de trabalho atual**: `claude/review-project-structure-zHTqb`
 **Branch de deploy**: `claude/fluxo-v2`
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
-**Versão atual**: `6.03`
+**Versão atual**: `6.5`
 
-> **REGRA DE VERSÃO**: TODA MODIFICAÇÃO NO CÓDIGO incrementa a versão. +0.01 para bugfix/ajuste (pode fazer sem perguntar). +1.00 (reset decimal) para nova funcionalidade ou refactor significativo — **sempre perguntar ao usuário antes de fazer bump +1.00**.
+> **REGRA DE VERSÃO**: TODA MODIFICAÇÃO NO CÓDIGO incrementa a versão. +0.1 para feature/refactor relevante. +0.01 para bugfix/ajuste (pode fazer sem perguntar). +1.00 (reset decimal) para refactor estrutural — **sempre perguntar ao usuário antes de fazer bump +1.00**.
 
 ---
 
@@ -65,21 +65,23 @@ high: --imp-high-tint: #f4e4cc --imp-high: #d0a070
 crit: --imp-crit-tint: #f2dada --imp-crit: #c87878
 ```
 
-### TAG_COLORS (16 cores, índices 0–15)
-Índices usados como cores de cadernos e notas editor:
-- 2 → `#b8d9c4` (verde menta)
-- 6 → `#f0c8a0` (laranja pêssego)
-- 11 → `#a8c8e0` (azul bebê)
-- 9 → `#c8b0d8` (lilás)
+### TAG_COLORS (16 cores, lightest→darkest)
+```
+#f4f0e8 creme · #f0d898 amarelo pastel · #c8a040 dourado★ · #d4e890 lima
+#68b888 verde★ · #90dcd4 menta · #6a9ec8 azul★ · #c0a8e8 lilás
+#f4a8b8 rosa pastel · #d47878 salmão★ · #b89870 caramelo · #70a870 musgo
+#5878a8 ardósia · #906888 ameixa · #504840 marrom escuro · #282828 preto fosco
+```
+★ = âncoras usadas no EDITOR_COLORS
 
 ### EDITOR_COLORS (notas)
 ```js
 [
   { hex: "default", label: "Padrão" },
-  { hex: "#b8d9c4", label: "Verde menta" },
-  { hex: "#f0c8a0", label: "Laranja pêssego" },
-  { hex: "#a8c8e0", label: "Azul bebê" },
-  { hex: "#c8b0d8", label: "Lilás" },
+  { hex: "#d47878", label: "Vermelho" },
+  { hex: "#6a9ec8", label: "Azul" },
+  { hex: "#68b888", label: "Verde" },
+  { hex: "#c8a040", label: "Amarelo" },
 ]
 ```
 
@@ -126,12 +128,14 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 - `fluxo/notified` — Set de IDs de notificações já exibidas
 - `fluxo/changelog-checks` — checkboxes do changelog
 - `fluxo/auth` — `{ pin: sha256hash, webAuthnCredId? }`
-- `fluxo-v11` — cache do SW (assets estáticos)
+- `fluxo-v13` — cache do SW (assets estáticos)
 - `fluxo-notif` — cache do SW (scheduled-items, persiste entre restarts)
+- `fluxo/icon-png` — localStorage: PNG 192×192 do ícone para notificações
+- `fluxo/badge-png` — localStorage: PNG 96×96 do badge para notificações
 
 ---
 
-## Status Atual — v6.01
+## Status Atual — v6.5
 
 ### Aba Tarefas
 - Calendário mini: 35 células (5×7), dots coloridos por importância, swipe horizontal muda mês
@@ -151,10 +155,11 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 - Cadernos com cor; long press = editar; páginas com cor do caderno no nome
 - Editor WYSIWYG (contenteditable + execCommand): negrito, itálico, título (h1), lista, cor
 - Toolbar: `[T serif]` `[N bold]` `[I skewed]` `[● Cor]` `[☰ Lista]`
-- Paleta de cores: 4 cores de TAG_COLORS + padrão (removeFormat)
+- Paleta de cores editor: 4 âncoras do TAG_COLORS (#d47878/#6a9ec8/#68b888/#c8a040) + padrão
 - Linhas de caderno: `line-height: 2em`, texto acima da linha, `padding-top: 14px`
 - Contagem de linhas não-vazias exibida no card da página (ex: "12 mai · 4 linhas")
 - Botão Salvar FAB: fixo bottom-right, oculto quando teclado está aberto (via `visualViewport`)
+- Página de nota: ocupa 100dvh, sem border-radius, sem animação de entrada (evita salto da tab bar)
 
 ### Navegação
 - Swipe lateral: troca abas (Tarefas ↔ Compras ↔ Notas)
@@ -174,10 +179,10 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 
 | # | Item |
 |---|---|
-| 1 | Notificações no horário: validar recebimento após bump do SW para v11 |
-| 2 | `visualViewport` no iOS: comportamento pode diferir (teclado não reduz viewport no iOS). Validar save FAB |
-| 3 | `page-textarea` contenteditable: `innerText` em algumas engines pode diferir de `textContent` para contagem de linhas |
-| 4 | Tints escurecidos: validar em dark mode — os novos valores do dark mode foram mantidos do original |
+| 1 | Notificações no horário: validar recebimento com badge PNG no SW v13 |
+| 2 | `visualViewport` no iOS: teclado não reduz viewport no iOS — save FAB pode não ocultar |
+| 3 | Tab bar jump: validar se correção (sem chamada imediata + animation:none) resolveu no dispositivo |
+| 4 | TAG_COLORS escuras (#504840, #282828): verificar legibilidade em dark mode (texto sobreposto) |
 
 ---
 
@@ -185,7 +190,8 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 
 - `claude/task-manager-voice-input-eisIH` — v1, "Minhas Tarefas"
 - `claude/fluxo-v2` — v2/v3/v4 — branch de deploy (GitHub Pages)
-- `claude/fix-mobile-cache-update-z3LsR` — v5.00–v6.01 — branch de desenvolvimento atual
+- `claude/fix-mobile-cache-update-z3LsR` — v5.00–v6.01
+- `claude/review-project-structure-zHTqb` — v6.4–v6.5 — branch de desenvolvimento atual
 
 ---
 
@@ -225,11 +231,13 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 - Ícone pontual: 𝟏 (U+1D7CF)
 - Botão título: T serifado (Georgia bold)
 - Botão itálico: I inclinado 15° (skewX)
-- Cores editor: 4 de TAG_COLORS (índices 2/6/11/9) + padrão
+- Cores editor: 4 âncoras fixas (#d47878/#6a9ec8/#68b888/#c8a040) + padrão (v6.4→)
+- TAG_COLORS migrou para 16 cores (gelo a preto fosco) com 4 âncoras do editor (v6.5)
 - Tints de importância: levemente escurecidos (v6.01)
 - Calendar day cells: aspect-ratio 1 (quadrado, ~metade da altura anterior)
-- Notes save FAB: visualViewport para detectar teclado mobile
-- SW cache: fluxo-v11 (bump forçado por mudanças CSS + immediate notifs)
+- Notes save FAB: visualViewport para detectar teclado mobile (sem chamada imediata desde v6.5)
+- SW cache: fluxo-v13
+- Notificações: badge PNG 96×96 gerado via Canvas, passado ao SW (v6.5)
 
 ---
 

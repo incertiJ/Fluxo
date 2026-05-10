@@ -1,12 +1,18 @@
-/* Fluxo v6.4 */
+/* Fluxo v6.5 */
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.4";
+const APP_VERSION = "6.5";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "6.5": [
+    "Design: paleta de 16 cores (gelo a preto fosco) com âncoras do editor embutidas",
+    "Notas: página ocupa 100% da tela (sem borda, sem animação de entrada)",
+    "Notas: corrigido salto da barra de abas ao abrir página",
+    "Notificações: badge do app restaurado nas notificações do SW",
+  ],
   "6.4": [
     "Design: nova paleta de 14 cores pastéis (7 famílias × 2 tons)",
     "Notas: cores do editor atualizadas — vermelho, azul, verde, amarelo (tons suaves)",
@@ -88,22 +94,31 @@ const CHANGELOG = {
 };
 
 const TAG_COLORS = [
-  "#9ecfc8", "#c4e8e4",  // teal
-  "#9ec4e0", "#c0d8f0",  // azul celeste
-  "#a8d4b4", "#c8ead4",  // verde menta
-  "#e0d490", "#f0e8bc",  // amarelo
-  "#eec4a0", "#f8dcc4",  // pêssego
-  "#e8a8a8", "#f4d0d0",  // rosa
-  "#c4b0d8", "#ddd0ec",  // lavanda
+  "#f4f0e8",  // creme
+  "#f0d898",  // amarelo pastel
+  "#c8a040",  // dourado (= editor amarelo)
+  "#d4e890",  // lima
+  "#68b888",  // verde (= editor verde)
+  "#90dcd4",  // menta
+  "#6a9ec8",  // azul (= editor azul)
+  "#c0a8e8",  // lilás
+  "#f4a8b8",  // rosa pastel
+  "#d47878",  // salmão (= editor vermelho)
+  "#b89870",  // caramelo
+  "#70a870",  // verde musgo
+  "#5878a8",  // azul ardósia
+  "#906888",  // ameixa
+  "#504840",  // marrom escuro
+  "#282828",  // preto fosco
 ];
 
 const DEFAULT_TAGS = [
-  { name: "Limpeza", color: "#a8d4b4" },
-  { name: "Viagem", color: "#9ec4e0" },
-  { name: "Burocracia", color: "#e0d490" },
-  { name: "Saúde", color: "#e8a8a8" },
-  { name: "Finanças", color: "#9ecfc8" },
-  { name: "Compras", color: "#c4b0d8" }
+  { name: "Limpeza", color: "#68b888" },
+  { name: "Viagem", color: "#6a9ec8" },
+  { name: "Burocracia", color: "#5878a8" },
+  { name: "Saúde", color: "#90dcd4" },
+  { name: "Finanças", color: "#c8a040" },
+  { name: "Compras", color: "#d47878" },
 ];
 
 const IMP_WEIGHT = { 1: 1, 2: 6, 3: 10, 4: 30 };
@@ -1308,7 +1323,6 @@ function setupPageSaveFab() {
       if (modalContent) modalContent.style.height = Math.round(vh * 0.96) + "px";
     };
     window.visualViewport.addEventListener("resize", _pageSaveFabVVListener);
-    _pageSaveFabVVListener(); // apply immediately
   }
 }
 
@@ -2249,10 +2263,16 @@ function buildDigestItem(triggerMs, kind, h = null, m = null) {
 }
 
 let _notifIconUrl = "./icon.svg";
+let _notifBadgeUrl = "./icon.svg";
 
 async function generateNotifIconPng() {
-  const cached = localStorage.getItem("fluxo/icon-png");
-  if (cached) { _notifIconUrl = cached; return; }
+  const cachedIcon = localStorage.getItem("fluxo/icon-png");
+  const cachedBadge = localStorage.getItem("fluxo/badge-png");
+  if (cachedIcon && cachedBadge) {
+    _notifIconUrl = cachedIcon;
+    _notifBadgeUrl = cachedBadge;
+    return;
+  }
   try {
     const res = await fetch("./icon.svg");
     const svg = await res.text();
@@ -2264,10 +2284,17 @@ async function generateNotifIconPng() {
         const canvas = document.createElement("canvas");
         canvas.width = 192; canvas.height = 192;
         canvas.getContext("2d").drawImage(img, 0, 0, 192, 192);
+        const iconDataUrl = canvas.toDataURL("image/png");
+        try { localStorage.setItem("fluxo/icon-png", iconDataUrl); } catch {}
+        _notifIconUrl = iconDataUrl;
+
+        canvas.width = 96; canvas.height = 96;
+        canvas.getContext("2d").clearRect(0, 0, 96, 96);
+        canvas.getContext("2d").drawImage(img, 0, 0, 96, 96);
         URL.revokeObjectURL(objUrl);
-        const dataUrl = canvas.toDataURL("image/png");
-        try { localStorage.setItem("fluxo/icon-png", dataUrl); } catch {}
-        _notifIconUrl = dataUrl;
+        const badgeDataUrl = canvas.toDataURL("image/png");
+        try { localStorage.setItem("fluxo/badge-png", badgeDataUrl); } catch {}
+        _notifBadgeUrl = badgeDataUrl;
         resolve();
       };
       img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(); };
@@ -2282,7 +2309,7 @@ async function scheduleNotifications() {
   try {
     const reg = await navigator.serviceWorker.ready;
     const ctrl = navigator.serviceWorker.controller || reg.active;
-    if (ctrl) ctrl.postMessage({ type: "schedule", items: buildScheduledNotifications(), icon: _notifIconUrl });
+    if (ctrl) ctrl.postMessage({ type: "schedule", items: buildScheduledNotifications(), icon: _notifIconUrl, badge: _notifBadgeUrl });
   } catch {}
 }
 
@@ -2297,7 +2324,7 @@ function checkDueNotifications() {
     for (const it of items) {
       if (it.triggerMs <= now && !notified.has(it.id)) {
         if (reg) {
-          reg.showNotification(it.title, { body: it.body, tag: it.id, icon: "./icon.svg", badge: "./icon.svg" }).catch(() => {});
+          reg.showNotification(it.title, { body: it.body, tag: it.id, icon: _notifIconUrl, badge: _notifBadgeUrl }).catch(() => {});
         }
         notified.add(it.id);
       }
@@ -2974,7 +3001,7 @@ async function registerSW() {
 
 async function initApp() {
   await registerSW();
-  generateNotifIconPng(); // async — runs in background, updates _notifIconUrl when ready
+  await generateNotifIconPng();
   checkDueNotifications();
   scheduleNotifications();
 

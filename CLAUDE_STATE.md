@@ -128,14 +128,14 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 - `fluxo/notified` — Set de IDs de notificações já exibidas
 - `fluxo/changelog-checks` — checkboxes do changelog
 - `fluxo/auth` — `{ pin: sha256hash, webAuthnCredId? }`
-- `fluxo-v13` — cache do SW (assets estáticos)
+- `fluxo-v14` — cache do SW (assets estáticos)
 - `fluxo-notif` — cache do SW (scheduled-items, persiste entre restarts)
 - `fluxo/icon-png` — localStorage: PNG 192×192 do ícone para notificações
-- `fluxo/badge-png` — localStorage: PNG 96×96 do badge para notificações
+- `fluxo/badge-png-v2` — localStorage: PNG 96×96 branco/monocromático para badge (v2 = monochrome)
 
 ---
 
-## Status Atual — v6.5
+## Status Atual — v6.6
 
 ### Aba Tarefas
 - Calendário mini: 35 células (5×7), dots coloridos por importância, swipe horizontal muda mês
@@ -150,12 +150,14 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 - FAB `+` abre modal "Adicionar novo item"
 - Header da categoria: click = expande/colapsa; long press = edição
 - Nome do item: click = edição inline
+- Enter no campo "Adicionar item" não pula para outro campo (doAdd sem refocus)
 
 ### Aba Notas
 - Cadernos com cor; long press = editar; páginas com cor do caderno no nome
 - Editor WYSIWYG (contenteditable + execCommand): negrito, itálico, título (h1), lista, cor
 - Toolbar: `[T serif]` `[N bold]` `[I skewed]` `[● Cor]` `[☰ Lista]`
 - Paleta de cores editor: 4 âncoras do TAG_COLORS (#d47878/#6a9ec8/#68b888/#c8a040) + padrão
+- Cor do botão ● Cor resetada ao abrir qualquer página (fix: colorDot.style.color = "" em openNotePage)
 - Linhas de caderno: `line-height: 2em`, texto acima da linha, `padding-top: 14px`
 - Contagem de linhas não-vazias exibida no card da página (ex: "12 mai · 4 linhas")
 - Botão Salvar FAB: fixo bottom-right, oculto quando teclado está aberto (via `visualViewport`)
@@ -171,7 +173,9 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 
 ### Notificações
 - Agendamento via SW (`schedule` message + `rescheduleAll`)
-- SW v11: cache `fluxo-v11`, mostra imediatamente notificações já vencidas ao receber schedule
+- SW v14: cache `fluxo-v14`, mostra imediatamente notificações já vencidas ao receber schedule
+- Badge: PNG 96×96 branco/silhueta (source-atop #ffffff sobre o SVG renderizado)
+- **Limitação conhecida**: setTimeout no SW não é confiável com app fechada + Doze mode. Sem servidor de push, não há garantia de entrega. Notificações chegam quando o SW é reativado por fetch (rede).
 
 ---
 
@@ -179,10 +183,11 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 
 | # | Item |
 |---|---|
-| 1 | Notificações no horário: validar recebimento com badge PNG no SW v13 |
+| 1 | Notificações: validar se badge branco aparece na barra de status (alguns launchers ignoram o campo badge) |
 | 2 | `visualViewport` no iOS: teclado não reduz viewport no iOS — save FAB pode não ocultar |
 | 3 | Tab bar jump: validar se correção (sem chamada imediata + animation:none) resolveu no dispositivo |
-| 4 | TAG_COLORS escuras (#504840, #282828): verificar legibilidade em dark mode (texto sobreposto) |
+| 4 | TAG_COLORS escuras (#504840, #8b3570): verificar legibilidade do texto sobreposto em dark mode |
+| 5 | Notificações com app fechada: limitação de plataforma (Doze mode termina SW). Sem server de push = sem garantia. |
 
 ---
 
@@ -236,8 +241,10 @@ SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNo
 - Tints de importância: levemente escurecidos (v6.01)
 - Calendar day cells: aspect-ratio 1 (quadrado, ~metade da altura anterior)
 - Notes save FAB: visualViewport para detectar teclado mobile (sem chamada imediata desde v6.5)
-- SW cache: fluxo-v13
-- Notificações: badge PNG 96×96 gerado via Canvas, passado ao SW (v6.5)
+- SW cache: fluxo-v14 (bumped em v6.6)
+- Notificações: badge monocromático (branco/silhueta) 96×96 via Canvas + source-atop (v6.6)
+- Cor do editor: resetada no openNotePage (colorDot fix, v6.6)
+- Shopping Enter: doAdd(false) — sem refocus pós-render (v6.6)
 
 ---
 

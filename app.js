@@ -1,17 +1,18 @@
-/* Fluxo v6.5 */
+/* Fluxo v6.6 */
 
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.5";
+const APP_VERSION = "6.6";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
-  "6.5": [
-    "Design: paleta de 16 cores (gelo a preto fosco) com âncoras do editor embutidas",
-    "Notas: página ocupa 100% da tela (sem borda, sem animação de entrada)",
-    "Notas: corrigido salto da barra de abas ao abrir página",
-    "Notificações: badge do app restaurado nas notificações do SW",
+  "6.6": [
+    "Design: cor escura da paleta trocada de preto fosco por vinho (#8b3570)",
+    "Notificações: badge monocromático (branco) da logo Fluxo na barra de status",
+    "Notificações: cache do SW atualizado (fluxo-v14) — garante código novo na PWA",
+    "Notas: cor do editor não fica mais travada ao reabrir o painel de cores",
+    "Compras: Enter adiciona item sem pular para o campo de outra lista aberta",
   ],
   "6.4": [
     "Design: nova paleta de 14 cores pastéis (7 famílias × 2 tons)",
@@ -109,7 +110,7 @@ const TAG_COLORS = [
   "#5878a8",  // azul ardósia
   "#906888",  // ameixa
   "#504840",  // marrom escuro
-  "#282828",  // preto fosco
+  "#8b3570",  // vinho
 ];
 
 const DEFAULT_TAGS = [
@@ -988,7 +989,7 @@ function renderShoppingCategory(cat) {
     };
     const addItemBtn = el("button", { type: "button", class: "ghost-btn" }, "+");
     addItemBtn.addEventListener("click", () => doAdd(false));
-    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(true); } });
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(false); } });
     addRow.append(input, addItemBtn);
     body.appendChild(addRow);
     card.appendChild(body);
@@ -1295,9 +1296,11 @@ function openNotePage(pageId, notebookId = null) {
   editor.innerHTML = page?.content || "";
   document.getElementById("notes-page-modal").dataset.notebookId = notebookId || page?.notebookId || "";
   document.getElementById("notes-page-modal").hidden = false;
-  // Close color picker if open
+  // Reset color dot and close picker
   const picker = document.querySelector(".page-tool-color-picker");
   if (picker) picker.hidden = true;
+  const colorDot = document.querySelector(".color-btn-dot");
+  if (colorDot) colorDot.style.color = "";
   setupPageSaveFab();
 }
 
@@ -2267,7 +2270,7 @@ let _notifBadgeUrl = "./icon.svg";
 
 async function generateNotifIconPng() {
   const cachedIcon = localStorage.getItem("fluxo/icon-png");
-  const cachedBadge = localStorage.getItem("fluxo/badge-png");
+  const cachedBadge = localStorage.getItem("fluxo/badge-png-v2");
   if (cachedIcon && cachedBadge) {
     _notifIconUrl = cachedIcon;
     _notifBadgeUrl = cachedBadge;
@@ -2288,12 +2291,17 @@ async function generateNotifIconPng() {
         try { localStorage.setItem("fluxo/icon-png", iconDataUrl); } catch {}
         _notifIconUrl = iconDataUrl;
 
-        canvas.width = 96; canvas.height = 96;
-        canvas.getContext("2d").clearRect(0, 0, 96, 96);
-        canvas.getContext("2d").drawImage(img, 0, 0, 96, 96);
+        const bctx = (() => { canvas.width = 96; canvas.height = 96; return canvas.getContext("2d"); })();
+        bctx.clearRect(0, 0, 96, 96);
+        bctx.drawImage(img, 0, 0, 96, 96);
+        // Silhueta branca — substitui todos os pixels visíveis por branco puro
+        bctx.globalCompositeOperation = "source-atop";
+        bctx.fillStyle = "#ffffff";
+        bctx.fillRect(0, 0, 96, 96);
+        bctx.globalCompositeOperation = "source-over";
         URL.revokeObjectURL(objUrl);
         const badgeDataUrl = canvas.toDataURL("image/png");
-        try { localStorage.setItem("fluxo/badge-png", badgeDataUrl); } catch {}
+        try { localStorage.setItem("fluxo/badge-png-v2", badgeDataUrl); } catch {}
         _notifBadgeUrl = badgeDataUrl;
         resolve();
       };

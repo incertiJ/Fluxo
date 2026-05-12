@@ -3,7 +3,7 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.6";
+const APP_VERSION = "6.7";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
@@ -109,8 +109,8 @@ const TAG_COLORS = [
   "#70a870",  // verde musgo
   "#5878a8",  // azul ardósia
   "#906888",  // ameixa
-  "#504840",  // marrom escuro
   "#8b3570",  // vinho
+  "#504840",  // marrom escuro (mais escuro = último)
 ];
 
 const DEFAULT_TAGS = [
@@ -897,7 +897,7 @@ function renderShoppingCategory(cat) {
   card.style.setProperty("--cat-bg", hexToRgba(cat.color, 0.13));
   card.style.setProperty("--cat-tint", hexToRgba(cat.color, 0.07));
 
-  const hdr = el("div", { class: "shopping-cat-header" });
+  const hdr = el("div", { class: "shopping-cat-header", "data-cat-id": cat.id });
 
   // Click = expand/collapse
   hdr.addEventListener("click", () => {
@@ -915,8 +915,8 @@ function renderShoppingCategory(cat) {
   const dot = el("span", { class: "shopping-cat-dot" });
   dot.style.background = cat.color;
   const name = el("span", { class: "shopping-cat-name" }, cat.name);
-  const unchecked = cat.items.filter(i => !i.checked).length;
-  const count = el("span", { class: "shopping-cat-count" }, `${unchecked}/${cat.items.length}`);
+  const checkedCount = cat.items.filter(i => i.checked).length;
+  const count = el("span", { class: "shopping-cat-count" }, `${checkedCount}/${cat.items.length}`);
   const toggle = el("span", { class: "shopping-cat-chevron" }, cat.collapsed ? "▶" : "▼");
   hdr.append(dot, name, count, toggle);
   card.appendChild(hdr);
@@ -924,7 +924,21 @@ function renderShoppingCategory(cat) {
   if (!cat.collapsed) {
     const body = el("div", { class: "shopping-cat-body" });
 
-    cat.items.forEach((item, i) => {
+    const IMP_ORDER = ["urgente", "necessidade", "conforto", "luxo"];
+    const IMP_CYCLE = { luxo: "conforto", conforto: "necessidade", necessidade: "urgente", urgente: "luxo" };
+    const IMP_LABELS = { urgente: "Urgente", necessidade: "Necessidade", conforto: "Conforto", luxo: "Luxo" };
+
+    // Sort: unchecked first (by importance), checked at end
+    const sortedItems = [...cat.items.entries()].sort(([, a], [, b]) => {
+      if (a.checked !== b.checked) return a.checked ? 1 : -1;
+      return IMP_ORDER.indexOf(a.importance || "luxo") - IMP_ORDER.indexOf(b.importance || "luxo");
+    });
+
+    sortedItems.forEach(([i, item]) => {
+      const imp = item.importance || "luxo";
+      const wrap = el("div", { class: "swipe-delete-wrap" });
+      const bg = el("div", { class: "swipe-delete-bg" });
+      bg.innerHTML = '<span class="swipe-delete-icon" aria-hidden="true">🗑</span>';
       const row = el("div", { class: "shopping-item" + (item.checked ? " checked" : "") });
 
       const cb = el("input", { type: "checkbox", class: "styled-check" });
@@ -942,32 +956,68 @@ function renderShoppingCategory(cat) {
       // Click → inline edit
       nameEl.addEventListener("click", e => {
         e.stopPropagation();
-        const input = el("input", { type: "text", class: "shopping-item-input", value: item.name, maxlength: "200" });
-        const confirm = () => {
-          const v = input.value.trim();
+        const inp = el("input", { type: "text", class: "shopping-item-input", value: item.name, maxlength: "200" });
+        const confirmEdit = () => {
+          const v = inp.value.trim();
           if (v) { cat.items[i].name = v; save(); }
-          input.replaceWith(nameEl);
+          inp.replaceWith(nameEl);
           nameEl.textContent = cat.items[i].name;
         };
-        input.addEventListener("blur", confirm);
-        input.addEventListener("keydown", ev => {
-          if (ev.key === "Enter") { ev.preventDefault(); confirm(); }
-          if (ev.key === "Escape") { input.replaceWith(nameEl); }
+        inp.addEventListener("blur", confirmEdit);
+        inp.addEventListener("keydown", ev => {
+          if (ev.key === "Enter") { ev.preventDefault(); inp.blur(); }
+          if (ev.key === "Escape") { inp.removeEventListener("blur", confirmEdit); inp.replaceWith(nameEl); }
         });
-        nameEl.replaceWith(input);
-        input.focus();
-        input.select();
+        nameEl.replaceWith(inp);
+        inp.focus();
+        inp.select();
       });
 
-      const rm = el("button", { type: "button", class: "remove-btn" }, "×");
-      rm.addEventListener("click", e => {
+      // Importance badge (cycles on click)
+      const badge = el("button", { type: "button", class: `shopping-imp-badge shopping-imp-badge--${imp}` }, IMP_LABELS[imp]);
+      badge.addEventListener("click", e => {
         e.stopPropagation();
-        cat.items.splice(i, 1);
+        cat.items[i].importance = IMP_CYCLE[imp];
         save();
         render();
       });
-      row.append(cb, nameEl, rm);
-      body.appendChild(row);
+
+      row.append(cb, nameEl, badge);
+
+      // Swipe-to-delete
+      let swStartX = 0, swStartY = 0, swDx = 0, swDragging = false;
+      row.addEventListener("touchstart", e => {
+        swStartX = e.touches[0].clientX;
+        swStartY = e.touches[0].clientY;
+        swDx = 0; swDragging = true;
+        row.style.transition = "none";
+      }, { passive: true });
+      row.addEventListener("touchmove", e => {
+        if (!swDragging) return;
+        const dx = e.touches[0].clientX - swStartX;
+        const dy = e.touches[0].clientY - swStartY;
+        if (Math.abs(dy) > Math.abs(dx) + 5) { swDragging = false; row.style.transform = ""; return; }
+        if (dx >= 0) { row.style.transform = ""; return; }
+        swDx = dx;
+        row.style.transform = `translateX(${dx}px)`;
+      }, { passive: true });
+      row.addEventListener("touchend", () => {
+        swDragging = false;
+        const threshold = wrap.offsetWidth * 0.4 || 120;
+        if (swDx < -threshold) {
+          row.style.transition = "transform 0.22s ease-in";
+          row.style.transform = "translateX(-110%)";
+          setTimeout(() => { cat.items.splice(i, 1); save(); render(); }, 230);
+        } else {
+          row.style.transition = "transform 0.18s ease-out";
+          row.style.transform = "";
+          swDx = 0;
+        }
+      }, { passive: true });
+      wrap.addEventListener("click", e => { if (Math.abs(swDx) > 8) { e.stopPropagation(); swDx = 0; } }, true);
+
+      wrap.append(bg, row);
+      body.appendChild(wrap);
     });
 
     const addRow = el("div", { class: "shopping-add-row", "data-cat-id": cat.id });
@@ -981,7 +1031,7 @@ function renderShoppingCategory(cat) {
     const doAdd = (refocus = false) => {
       const v = input.value.trim();
       if (!v) return;
-      cat.items.push({ id: uid(), name: v, checked: false });
+      cat.items.push({ id: uid(), name: v, checked: false, importance: "luxo" });
       input.value = "";
       save();
       render();
@@ -989,7 +1039,7 @@ function renderShoppingCategory(cat) {
     };
     const addItemBtn = el("button", { type: "button", class: "ghost-btn" }, "+");
     addItemBtn.addEventListener("click", () => doAdd(false));
-    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(false); } });
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); doAdd(false); } });
     addRow.append(input, addItemBtn);
     body.appendChild(addRow);
     card.appendChild(body);
@@ -1175,7 +1225,7 @@ function renderNotebook(nb) {
   card.style.setProperty("--nb-color", nb.color);
   card.style.setProperty("--nb-bg", hexToRgba(nb.color, 0.12));
 
-  const hdr = el("div", { class: "notebook-hdr" });
+  const hdr = el("div", { class: "notebook-hdr", "data-nb-id": nb.id });
   hdr.addEventListener("click", () => {
     nb.collapsed = !nb.collapsed;
     save();
@@ -1294,6 +1344,12 @@ function openNotePage(pageId, notebookId = null) {
   document.getElementById("page-title-input").value = page?.name || "";
   const editor = document.getElementById("page-content-input");
   editor.innerHTML = page?.content || "";
+  // Append a reset-color sentinel so new typing defaults to theme color
+  const sentinel = document.createElement("span");
+  sentinel.dataset.colorReset = "1";
+  sentinel.style.color = "inherit";
+  sentinel.textContent = "​"; // zero-width space
+  editor.appendChild(sentinel);
   document.getElementById("notes-page-modal").dataset.notebookId = notebookId || page?.notebookId || "";
   document.getElementById("notes-page-modal").hidden = false;
   // Reset color dot and close picker
@@ -1345,7 +1401,10 @@ function teardownPageSaveFab() {
 
 function saveNotePage() {
   const name = document.getElementById("page-title-input").value.trim() || "Sem título";
-  const content = document.getElementById("page-content-input").innerHTML;
+  const editorEl = document.getElementById("page-content-input");
+  // Remove color-reset sentinels before saving
+  editorEl.querySelectorAll("[data-color-reset]").forEach(n => n.remove());
+  const content = editorEl.innerHTML;
   const notebookId = document.getElementById("notes-page-modal").dataset.notebookId;
 
   if (state.editingPageId) {
@@ -1394,6 +1453,28 @@ function renderMarkdown(text) {
   html = html.replace(/(?<![>])\n/g, "<br>");
 
   return html;
+}
+
+/* ===== To-do list in notes editor ===== */
+
+function insertTodoList() {
+  const editor = document.getElementById("page-content-input");
+  if (!editor) return;
+  editor.focus();
+  document.execCommand("insertHTML", false,
+    '<ul class="todo-list"><li><span class="todo-check" contenteditable="false">☐</span>&nbsp;</li></ul>'
+  );
+}
+
+function setupTodoCheckboxes(editor) {
+  editor.addEventListener("click", e => {
+    const check = e.target.closest(".todo-check");
+    if (!check) return;
+    e.preventDefault();
+    const done = check.textContent === "☑";
+    check.textContent = done ? "☐" : "☑";
+    check.closest("li")?.classList.toggle("todo-done", !done);
+  });
 }
 
 /* ===== Notes page toolbar ===== */
@@ -1471,6 +1552,7 @@ function setupPageToolbar() {
           break;
         }
         case "list": document.execCommand("insertUnorderedList"); break;
+        case "todo": insertTodoList(); break;
         case "undo": document.execCommand("undo"); break;
       }
     });
@@ -1490,6 +1572,7 @@ function setupPageToolbar() {
             break;
           }
           case "list": document.execCommand("insertUnorderedList"); break;
+          case "todo": insertTodoList(); break;
           case "undo": document.execCommand("undo"); break;
         }
       });
@@ -2271,11 +2354,15 @@ let _notifBadgeUrl = "./icon.svg";
 async function generateNotifIconPng() {
   const cachedIcon = localStorage.getItem("fluxo/icon-png");
   const cachedBadge = localStorage.getItem("fluxo/badge-png-v2");
-  if (cachedIcon && cachedBadge) {
+  // Only use cache if both are valid base64 PNGs
+  if (cachedIcon?.startsWith("data:image/png") && cachedBadge?.startsWith("data:image/png")) {
     _notifIconUrl = cachedIcon;
     _notifBadgeUrl = cachedBadge;
     return;
   }
+  // Clear invalid cache entries
+  localStorage.removeItem("fluxo/icon-png");
+  localStorage.removeItem("fluxo/badge-png-v2");
   try {
     const res = await fetch("./icon.svg");
     const svg = await res.text();
@@ -2337,22 +2424,21 @@ function checkDueNotifications() {
         notified.add(it.id);
       }
     }
-    saveNotified(notified);
-  });
-  return; // async path handles saveNotified
-  for (const id of [...notified]) {
-    if (!allIds.has(id)) {
-      if (id.startsWith("d|")) {
-        const dateStr = id.split("|")[2];
-        if (dateStr && diffDays(todayISO(), dateStr) > 2) notified.delete(id);
-      } else {
-        const parts = id.split("|");
-        const baseMs = Number(parts[2] || 0);
-        if (baseMs && baseMs < now - 2 * 86400000) notified.delete(id);
+    // Cleanup stale notified IDs
+    for (const id of [...notified]) {
+      if (!allIds.has(id)) {
+        if (id.startsWith("d|")) {
+          const dateStr = id.split("|")[2];
+          if (dateStr && diffDays(todayISO(), dateStr) > 2) notified.delete(id);
+        } else {
+          const parts = id.split("|");
+          const baseMs = Number(parts[2] || 0);
+          if (baseMs && baseMs < now - 2 * 86400000) notified.delete(id);
+        }
       }
     }
-  }
-  saveNotified(notified);
+    saveNotified(notified);
+  });
 }
 
 /* ===== Settings modal ===== */
@@ -2677,6 +2763,7 @@ function setupUI() {
   const pageSaveFab = document.getElementById("page-save-fab");
   if (pageSaveFab) pageSaveFab.addEventListener("click", saveNotePage);
   setupPageToolbar();
+  setupTodoCheckboxes(document.getElementById("page-content-input"));
 
   // Notification toggle
   document.querySelectorAll('input[name="notif-enabled"]').forEach(r => {
@@ -3007,6 +3094,52 @@ async function registerSW() {
   } catch {}
 }
 
+function collapseLowestExpandedContainer() {
+  const candidates = [];
+
+  // Task sections (data-section with ▼)
+  document.querySelectorAll("[data-section]").forEach(sec => {
+    const toggle = sec.querySelector(".section-toggle");
+    if (toggle && toggle.textContent === "▼") {
+      candidates.push({ el: sec, key: sec.dataset.section, type: "section" });
+    }
+  });
+
+  // Shopping categories (data-cat-id with ▼)
+  document.querySelectorAll("[data-cat-id]").forEach(hdr => {
+    const chevron = hdr.querySelector(".shopping-cat-chevron");
+    if (chevron && chevron.textContent === "▼") {
+      candidates.push({ el: hdr, catId: hdr.dataset.catId, type: "cat" });
+    }
+  });
+
+  // Notebooks (data-nb-id with ▼)
+  document.querySelectorAll("[data-nb-id]").forEach(hdr => {
+    const chevron = hdr.querySelector(".shopping-cat-chevron");
+    if (chevron && chevron.textContent === "▼") {
+      candidates.push({ el: hdr, nbId: hdr.dataset.nbId, type: "nb" });
+    }
+  });
+
+  if (!candidates.length) return false;
+
+  // Pick the one lowest on screen (highest bottom coordinate)
+  candidates.sort((a, b) => b.el.getBoundingClientRect().bottom - a.el.getBoundingClientRect().bottom);
+  const target = candidates[0];
+
+  if (target.type === "section") {
+    state.homeCollapsed[target.key] = true;
+    render();
+  } else if (target.type === "cat") {
+    const cat = state.shopping.categories.find(c => c.id === target.catId);
+    if (cat) { cat.collapsed = true; save(); render(); }
+  } else if (target.type === "nb") {
+    const nb = state.notes.notebooks.find(n => n.id === target.nbId);
+    if (nb) { nb.collapsed = true; save(); render(); }
+  }
+  return true;
+}
+
 async function initApp() {
   await registerSW();
   await generateNotifIconPng();
@@ -3016,7 +3149,9 @@ async function initApp() {
   // Intercept system back gesture (Android) to close modals or confirm exit
   history.pushState({ fluxo: true }, "");
   window.addEventListener("popstate", () => {
-    if (closeLastModal()) {
+    if (collapseLowestExpandedContainer()) {
+      history.pushState({ fluxo: true }, "");
+    } else if (closeLastModal()) {
       history.pushState({ fluxo: true }, "");
     } else {
       if (confirm("Deseja sair do Fluxo?")) {

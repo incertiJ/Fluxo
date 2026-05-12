@@ -1269,10 +1269,10 @@ input[type="radio"]:checked::after {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 0;
+  padding: 8px 6px;
   border-bottom: 1px solid var(--border);
 }
-.shopping-item:last-of-type { border-bottom: none; }
+.swipe-delete-wrap:last-of-type .shopping-item { border-bottom: none; }
 
 .shopping-item-name {
   flex: 1;
@@ -1685,6 +1685,8 @@ input[type="radio"]:checked::after {
 
 /* ===== Notes page modal ===== */
 
+#notes-page-modal { align-items: flex-start; }
+
 .notes-page-content {
   height: 100vh;
   height: 100dvh;
@@ -1758,8 +1760,12 @@ div.page-textarea[contenteditable] h1 { font-size: 1.4rem; margin: 4px 0; }
 div.page-textarea[contenteditable] h2 { font-size: 1.2rem; margin: 3px 0; }
 div.page-textarea[contenteditable] strong { font-weight: 700; }
 div.page-textarea[contenteditable] em { font-style: italic; }
-div.page-textarea[contenteditable] ul { padding-left: 18px; margin: 4px 0; }
-div.page-textarea[contenteditable] li { margin: 2px 0; }
+div.page-textarea[contenteditable] ul { padding-left: 18px; margin: 0; }
+div.page-textarea[contenteditable] li { margin: 0; line-height: 2em; }
+div.page-textarea[contenteditable] ul.todo-list { list-style: none; padding-left: 4px; }
+div.page-textarea[contenteditable] ul.todo-list li { display: flex; align-items: center; gap: 6px; }
+div.page-textarea[contenteditable] ul.todo-list li.todo-done { text-decoration: line-through; color: var(--text-soft); }
+.todo-check { cursor: pointer; user-select: none; font-size: 1.1rem; flex-shrink: 0; }
 
 .page-preview {
   padding: 16px 18px;
@@ -2094,10 +2100,29 @@ div.page-textarea[contenteditable] li { margin: 2px 0; }
   line-height: 1;
 }
 
-.swipe-delete-wrap .task {
+.swipe-delete-wrap .task,
+.swipe-delete-wrap .shopping-item {
   position: relative;
   z-index: 1;
+  background: var(--surface);
 }
+
+/* Shopping importance badge */
+.shopping-imp-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: inherit;
+}
+.shopping-imp-badge--luxo    { background: #daeef0; color: #4a9098; }
+.shopping-imp-badge--conforto { background: #ece6d2; color: #8a7040; }
+.shopping-imp-badge--necessidade { background: #f4e4cc; color: #a07030; }
+.shopping-imp-badge--urgente  { background: #f2dada; color: #a04040; }
 
 /* ===== Undo delete toast ===== */
 

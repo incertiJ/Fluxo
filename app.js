@@ -3,10 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.4";
+const APP_VERSION = "7.5";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "7.5": [
+    "Gesto de borda direita: debounce de 300ms impede duplo disparo (touch + popstate do mesmo gesto físico)",
+    "Saída confirmada: agora fecha o PWA de verdade ao clicar Sim (segundo history.back via setTimeout)",
+  ],
   "7.4": [
     "Gesto de borda direita: deslizar da borda direita para esquerda aciona o back (fecha modal, colapsa container ou pergunta saída)",
     "Gesto de borda direita: separado do swipe de aba — não muda de aba quando parte dos últimos 30px da borda",
@@ -3278,8 +3282,12 @@ function collapseLowestExpandedContainer() {
 
 let _dialogShowing = false;
 let _exitPending = false;
+let _lastBackTime = 0;
 
 function handleBackAction() {
+  const now = Date.now();
+  if (now - _lastBackTime < 300) return; // debounce: prevent double-fire (touch + popstate same gesture)
+  _lastBackTime = now;
   if (_dialogShowing) {
     document.getElementById("exit-confirm-overlay")?.remove();
     _dialogShowing = false;
@@ -3327,7 +3335,12 @@ async function initApp() {
   // Invariant: popstate ALWAYS pushes state back (keeps app alive), except when _exitPending.
   history.pushState({ fluxo: true }, "");
   window.addEventListener("popstate", () => {
-    if (_exitPending) { _exitPending = false; return; }
+    if (_exitPending) {
+      _exitPending = false;
+      // First back consumed the "fluxo" entry. Second back (from initial URL) closes the PWA.
+      setTimeout(() => history.back(), 0);
+      return;
+    }
     handleBackAction();
     history.pushState({ fluxo: true }, ""); // always restore — PWA only closes via _exitPending
   });

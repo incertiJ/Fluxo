@@ -332,13 +332,13 @@
   </div>
 
   <!-- Modal: Changelog da versão -->
-  <div id="changelog-modal" class="modal" hidden>
-    <div class="modal-content small">
+  <div id="changelog-modal" class="modal changelog-fullscreen" hidden>
+    <div class="notes-page-content">
       <header class="modal-header">
-        <h2 id="changelog-title">Novidades</h2>
-        <button id="close-changelog" class="icon-btn" aria-label="Fechar">×</button>
+        <button id="close-changelog" class="icon-btn" aria-label="Fechar">←</button>
+        <h2 id="changelog-title" style="flex:1;margin:0;font-size:1.05rem">Novidades</h2>
       </header>
-      <div class="task-form">
+      <div class="task-form" style="overflow-y:auto;flex:1;padding:12px 16px">
         <p class="hint" style="margin-top:0">Marque o que você já testou nesta versão:</p>
         <div id="changelog-body" class="changelog-list"></div>
       </div>

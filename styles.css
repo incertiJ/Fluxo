@@ -1783,6 +1783,12 @@ div.page-textarea[contenteditable] ul.todo-list li.todo-done { text-decoration: 
 
 /* ===== Changelog modal ===== */
 
+.changelog-fullscreen {
+  background: var(--bg);
+  align-items: flex-start;
+  padding: 0;
+}
+
 .changelog-list {
   display: flex;
   flex-direction: column;

@@ -3,11 +3,20 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.91";
+const APP_VERSION = "7.1";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
-  "6.91": [
+  "7.1": [
+    "Navegação: diálogo de saída aparece corretamente ao pressionar back sem nada aberto",
+    "Navegação: cancelar saída funciona — app permanece aberto; Sair libera o gesto natural de fechar",
+    "Navegação: estado colapsado dos containers persiste entre renders (não volta ao estado inicial)",
+    "Compras: Enter confirma o item na lista sem pular para outro campo (usa form submit)",
+    "Notificações: logo redonda do Fluxo restaurada no corpo da notificação",
+    "Notificações: badge na barra de status agora é silhueta branca das ondas (sem fundo)",
+    "Versão: tela de novidades abre em tela cheia (como página de nota)",
+  ],
+  "7.0": [
     "Navegação: diálogo de saída agora aparece corretamente (loop de history resolvido)",
     "Navegação: múltiplos containers colapsam corretamente — cada gesto back fecha um",
     "Compras: Enter fecha teclado imediatamente sem selecionar outro campo",
@@ -227,6 +236,7 @@ function load() {
       state.notifSchedule = data.notifSchedule || [{ h: 9, m: 0 }, { h: 22, m: 0 }];
       state.appTheme = data.appTheme || "auto";
       state.userName = data.userName || "";
+      if (data.homeCollapsed) Object.assign(state.homeCollapsed, data.homeCollapsed);
     }
   } catch {}
   if (!state.tags.length) {
@@ -241,7 +251,7 @@ function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     tasks: state.tasks, tags: state.tags, shopping: state.shopping,
     notes: state.notes, notifSchedule: state.notifSchedule, appTheme: state.appTheme,
-    userName: state.userName,
+    userName: state.userName, homeCollapsed: state.homeCollapsed,
   }));
 }
 
@@ -1102,8 +1112,12 @@ function renderShoppingCategory(cat) {
     };
     const addItemBtn = el("button", { type: "button", class: "ghost-btn" }, "+");
     addItemBtn.addEventListener("click", () => doAdd(false));
-    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(false); } });
-    addRow.append(input, addItemBtn);
+    // Wrap in form so mobile "Go/Enter" fires submit reliably (keydown is unreliable on mobile)
+    const addForm = document.createElement("form");
+    addForm.style.display = "contents";
+    addForm.addEventListener("submit", e => { e.preventDefault(); doAdd(false); });
+    addForm.append(input, addItemBtn);
+    addRow.appendChild(addForm);
     body.appendChild(addRow);
     card.appendChild(body);
   }
@@ -2466,7 +2480,7 @@ let _notifBadgeUrl = "./icon.svg";
 
 async function generateNotifIconPng() {
   const cachedIcon = localStorage.getItem("fluxo/icon-png");
-  const cachedBadge = localStorage.getItem("fluxo/badge-png-v2");
+  const cachedBadge = localStorage.getItem("fluxo/badge-png-v3");
   // Only use cache if both are valid base64 PNGs
   if (cachedIcon?.startsWith("data:image/png") && cachedBadge?.startsWith("data:image/png")) {
     _notifIconUrl = cachedIcon;
@@ -2475,7 +2489,7 @@ async function generateNotifIconPng() {
   }
   // Clear invalid cache entries
   localStorage.removeItem("fluxo/icon-png");
-  localStorage.removeItem("fluxo/badge-png-v2");
+  localStorage.removeItem("fluxo/badge-png-v3");
   try {
     const res = await fetch("./icon.svg");
     const svg = await res.text();
@@ -2491,19 +2505,24 @@ async function generateNotifIconPng() {
         try { localStorage.setItem("fluxo/icon-png", iconDataUrl); } catch {}
         _notifIconUrl = iconDataUrl;
 
-        const bctx = (() => { canvas.width = 96; canvas.height = 96; return canvas.getContext("2d"); })();
-        bctx.clearRect(0, 0, 96, 96);
-        bctx.drawImage(img, 0, 0, 96, 96);
-        // Silhueta branca — substitui todos os pixels visíveis por branco puro
-        bctx.globalCompositeOperation = "source-atop";
-        bctx.fillStyle = "#ffffff";
-        bctx.fillRect(0, 0, 96, 96);
-        bctx.globalCompositeOperation = "source-over";
         URL.revokeObjectURL(objUrl);
-        const badgeDataUrl = canvas.toDataURL("image/png");
-        try { localStorage.setItem("fluxo/badge-png-v2", badgeDataUrl); } catch {}
-        _notifBadgeUrl = badgeDataUrl;
-        resolve();
+        // Badge: monochrome SVG — only wave shapes (no background rect) in white on transparent
+        const badgeSvgSrc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M70 360 C 160 300, 200 420, 290 360 S 420 300, 460 360 L 460 460 L 70 460 Z" fill="#ffffff"/><path d="M70 280 C 160 220, 220 340, 310 280 S 420 220, 460 280" fill="none" stroke="#ffffff" stroke-width="34" stroke-linecap="round"/><path d="M70 190 C 170 140, 230 250, 320 190 S 420 140, 460 190" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" opacity="0.85"/></svg>`;
+        const badgeBlob = new Blob([badgeSvgSrc], { type: "image/svg+xml" });
+        const badgeObjUrl = URL.createObjectURL(badgeBlob);
+        const badgeImg = new Image();
+        badgeImg.onload = () => {
+          const bc = document.createElement("canvas");
+          bc.width = 96; bc.height = 96;
+          bc.getContext("2d").drawImage(badgeImg, 0, 0, 96, 96);
+          URL.revokeObjectURL(badgeObjUrl);
+          const badgeDataUrl = bc.toDataURL("image/png");
+          try { localStorage.setItem("fluxo/badge-png-v3", badgeDataUrl); } catch {}
+          _notifBadgeUrl = badgeDataUrl;
+          resolve();
+        };
+        badgeImg.onerror = () => { URL.revokeObjectURL(badgeObjUrl); resolve(); };
+        badgeImg.src = badgeObjUrl;
       };
       img.onerror = () => { URL.revokeObjectURL(objUrl); resolve(); };
       img.src = objUrl;
@@ -2517,7 +2536,7 @@ async function scheduleNotifications() {
   try {
     const reg = await navigator.serviceWorker.ready;
     const ctrl = navigator.serviceWorker.controller || reg.active;
-    if (ctrl) ctrl.postMessage({ type: "schedule", items: buildScheduledNotifications(), badge: _notifBadgeUrl });
+    if (ctrl) ctrl.postMessage({ type: "schedule", items: buildScheduledNotifications(), icon: _notifIconUrl, badge: _notifBadgeUrl });
   } catch {}
 }
 
@@ -2532,7 +2551,7 @@ function checkDueNotifications() {
     for (const it of items) {
       if (it.triggerMs <= now && !notified.has(it.id)) {
         if (reg) {
-          reg.showNotification(it.title, { body: it.body, tag: it.id, badge: _notifBadgeUrl }).catch(() => {});
+          reg.showNotification(it.title, { body: it.body, tag: it.id, icon: _notifIconUrl, badge: _notifBadgeUrl }).catch(() => {});
         }
         notified.add(it.id);
       }
@@ -2641,6 +2660,7 @@ function renderSettingsBody() {
       const reg = await navigator.serviceWorker.ready;
       await reg.showNotification("Fluxo — Teste", {
         body: "Notificações estão funcionando!",
+        icon: _notifIconUrl,
         badge: _notifBadgeUrl,
         tag: "test-" + Date.now()
       });
@@ -2732,9 +2752,6 @@ function setupUI() {
   // Close changelog
   document.getElementById("close-changelog").addEventListener("click", () => {
     document.getElementById("changelog-modal").hidden = true;
-  });
-  document.getElementById("changelog-modal").addEventListener("click", e => {
-    if (e.target.id === "changelog-modal") document.getElementById("changelog-modal").hidden = true;
   });
 
   // Settings modal (logo click)
@@ -3241,6 +3258,7 @@ function collapseLowestExpandedContainer() {
 
   if (target.type === "section") {
     state.homeCollapsed[target.key] = true;
+    save();
     render();
   } else if (target.type === "cat") {
     const cat = state.shopping.categories.find(c => c.id === target.catId);
@@ -3266,21 +3284,18 @@ function showExitConfirmDialog() {
   btnRow.style.cssText = "display:flex;gap:12px";
   const cancelBtn = el("button", { type: "button" }, "Cancelar");
   cancelBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:0.95rem;cursor:pointer";
-  cancelBtn.addEventListener("click", () => overlay.remove());
+  cancelBtn.addEventListener("click", () => {
+    overlay.remove();
+    history.pushState({ fluxo: true }, ""); // restore the entry the browser consumed
+  });
   const exitBtn = el("button", { type: "button" }, "Sair");
   exitBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:0.95rem;cursor:pointer";
-  exitBtn.addEventListener("click", () => {
-    overlay.remove();
-    _exitPending = true;
-    history.back();
-  });
+  exitBtn.addEventListener("click", () => overlay.remove()); // browser already went back — PWA closes on next gesture
   btnRow.append(cancelBtn, exitBtn);
   box.append(msg, btnRow);
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 }
-
-let _exitPending = false;
 
 async function initApp() {
   await registerSW();
@@ -3291,13 +3306,12 @@ async function initApp() {
   // Intercept system back gesture (Android) to close modals or confirm exit
   history.pushState({ fluxo: true }, "");
   window.addEventListener("popstate", () => {
-    if (_exitPending) { _exitPending = false; return; }
     if (closeLastModal()) {
       history.pushState({ fluxo: true }, "");
     } else if (collapseLowestExpandedContainer()) {
       history.pushState({ fluxo: true }, "");
     } else {
-      history.pushState({ fluxo: true }, "");
+      // Don't push state — show dialog; Cancel will restore, Sair leaves browser to close PWA
       showExitConfirmDialog();
     }
   });

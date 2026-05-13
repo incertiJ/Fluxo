@@ -1,4 +1,4 @@
-const CACHE = "fluxo-v16";
+const CACHE = "fluxo-v17";
 const NOTIF_CACHE = "fluxo-notif";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js",
@@ -7,7 +7,6 @@ const ASSETS = [
 
 const timers = new Map();
 let scheduledItems = [];
-let notifIcon = "./icon.svg";
 let notifBadge = "./icon.svg";
 
 self.addEventListener("install", e => {
@@ -65,7 +64,6 @@ self.addEventListener("message", e => {
   if (data.type === "SKIP_WAITING") { self.skipWaiting(); return; }
   if (data.type === "schedule") {
     scheduledItems = data.items || [];
-    if (data.icon) notifIcon = data.icon;
     if (data.badge) notifBadge = data.badge;
     persistItems(scheduledItems);
     // Show any items that are already past-due immediately
@@ -75,7 +73,6 @@ self.addEventListener("message", e => {
         self.registration.showNotification(item.title, {
           body: item.body,
           tag: item.id,
-          icon: notifIcon,
           badge: notifBadge,
         }).catch(() => {});
       }
@@ -95,7 +92,6 @@ function rescheduleAll(items) {
       self.registration.showNotification(item.title, {
         body: item.body,
         tag: item.id,
-        icon: notifIcon,
         badge: notifBadge,
       });
       timers.delete(item.id);

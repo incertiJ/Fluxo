@@ -3,10 +3,19 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.8";
+const APP_VERSION = "6.9";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "6.9": [
+    "Navegação: gesto back fecha modal/página aberta antes de colapsar containers",
+    "Navegação: página de nota salva automaticamente ao fechar com gesto back",
+    "Navegação: diálogo de saída personalizado (substitui confirm() inoperante no Android)",
+    "Compras: cores de importância — azul (Luxo), verde (Conforto), laranja (Necessidade), vermelho (Urgente)",
+    "Compras: Enter fecha teclado sem pular para outro campo",
+    "Notas: indicador de cor reflete a cor atual do cursor ao navegar pelo texto",
+    "Notificações: removido ícone grande da notificação (apenas badge monocromático permanece)",
+  ],
   "6.8": [
     "Navegação: gesto back colapsa containers expandidos (incluindo calendário e lembrete abertos por padrão)",
     "Navegação: gesto back fecha página de nota aberta e salva automaticamente",
@@ -1077,10 +1086,10 @@ function renderShoppingCategory(cat) {
         refocusAfterRender();
       } else {
         // After render, blur any input that received auto-focus
-        requestAnimationFrame(() => {
+        setTimeout(() => {
           const a = document.activeElement;
           if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) a.blur();
-        });
+        }, 100);
       }
     };
     const addItemBtn = el("button", { type: "button", class: "ghost-btn" }, "+");
@@ -1384,6 +1393,38 @@ function deleteNotebookModal() {
   render();
 }
 
+function hexToRgbStr(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+let _selChangeHandler = null;
+
+function setupColorTracking() {
+  teardownColorTracking();
+  const editor = document.getElementById("page-content-input");
+  const colorDot = document.querySelector(".color-btn-dot");
+  if (!editor || !colorDot) return;
+  _selChangeHandler = () => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    if (!editor.contains(sel.getRangeAt(0).startContainer)) return;
+    const raw = document.queryCommandValue("foreColor");
+    const matched = EDITOR_COLORS.find(c => c.hex !== "default" && hexToRgbStr(c.hex) === raw);
+    colorDot.style.color = matched ? matched.hex : "";
+  };
+  document.addEventListener("selectionchange", _selChangeHandler);
+}
+
+function teardownColorTracking() {
+  if (_selChangeHandler) {
+    document.removeEventListener("selectionchange", _selChangeHandler);
+    _selChangeHandler = null;
+  }
+}
+
 function openNotePage(pageId, notebookId = null) {
   state.editingPageId = pageId;
   const page = pageId ? state.notes.pages.find(p => p.id === pageId) : null;
@@ -1398,12 +1439,14 @@ function openNotePage(pageId, notebookId = null) {
   const colorDot = document.querySelector(".color-btn-dot");
   if (colorDot) colorDot.style.color = "";
   setupPageSaveFab();
+  setupColorTracking();
 }
 
 function closeNotePage() {
   document.getElementById("notes-page-modal").hidden = true;
   state.editingPageId = null;
   teardownPageSaveFab();
+  teardownColorTracking();
 }
 
 let _pageSaveFabVVListener = null;
@@ -2466,7 +2509,7 @@ async function scheduleNotifications() {
   try {
     const reg = await navigator.serviceWorker.ready;
     const ctrl = navigator.serviceWorker.controller || reg.active;
-    if (ctrl) ctrl.postMessage({ type: "schedule", items: buildScheduledNotifications(), icon: _notifIconUrl, badge: _notifBadgeUrl });
+    if (ctrl) ctrl.postMessage({ type: "schedule", items: buildScheduledNotifications(), badge: _notifBadgeUrl });
   } catch {}
 }
 
@@ -2481,7 +2524,7 @@ function checkDueNotifications() {
     for (const it of items) {
       if (it.triggerMs <= now && !notified.has(it.id)) {
         if (reg) {
-          reg.showNotification(it.title, { body: it.body, tag: it.id, icon: _notifIconUrl, badge: _notifBadgeUrl }).catch(() => {});
+          reg.showNotification(it.title, { body: it.body, tag: it.id, badge: _notifBadgeUrl }).catch(() => {});
         }
         notified.add(it.id);
       }
@@ -3201,6 +3244,30 @@ function collapseLowestExpandedContainer() {
   return true;
 }
 
+function showExitConfirmDialog() {
+  if (document.getElementById("exit-confirm-overlay")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "exit-confirm-overlay";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center";
+  const box = document.createElement("div");
+  box.style.cssText = "background:var(--surface);border-radius:16px;padding:24px 20px;width:260px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.2)";
+  const msg = document.createElement("p");
+  msg.textContent = "Deseja sair do Fluxo?";
+  msg.style.cssText = "margin:0 0 20px;font-size:1rem;color:var(--text);font-weight:500";
+  const btnRow = document.createElement("div");
+  btnRow.style.cssText = "display:flex;gap:12px";
+  const cancelBtn = el("button", { type: "button" }, "Cancelar");
+  cancelBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:0.95rem;cursor:pointer";
+  cancelBtn.addEventListener("click", () => overlay.remove());
+  const exitBtn = el("button", { type: "button" }, "Sair");
+  exitBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:0.95rem;cursor:pointer";
+  exitBtn.addEventListener("click", () => { overlay.remove(); history.back(); });
+  btnRow.append(cancelBtn, exitBtn);
+  box.append(msg, btnRow);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
+
 async function initApp() {
   await registerSW();
   await generateNotifIconPng();
@@ -3210,16 +3277,13 @@ async function initApp() {
   // Intercept system back gesture (Android) to close modals or confirm exit
   history.pushState({ fluxo: true }, "");
   window.addEventListener("popstate", () => {
-    if (collapseLowestExpandedContainer()) {
+    if (closeLastModal()) {
       history.pushState({ fluxo: true }, "");
-    } else if (closeLastModal()) {
+    } else if (collapseLowestExpandedContainer()) {
       history.pushState({ fluxo: true }, "");
     } else {
-      if (confirm("Deseja sair do Fluxo?")) {
-        // Let browser navigate back naturally (closes PWA)
-      } else {
-        history.pushState({ fluxo: true }, "");
-      }
+      history.pushState({ fluxo: true }, "");
+      showExitConfirmDialog();
     }
   });
   setInterval(() => {

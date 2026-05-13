@@ -2119,8 +2119,8 @@ div.page-textarea[contenteditable] ul.todo-list li.todo-done { text-decoration: 
   white-space: nowrap;
   font-family: inherit;
 }
-.shopping-imp-badge--luxo    { background: #daeef0; color: #4a9098; }
-.shopping-imp-badge--conforto { background: #ece6d2; color: #8a7040; }
+.shopping-imp-badge--luxo    { background: #dde8f2; color: #4a6a9a; }
+.shopping-imp-badge--conforto { background: #d4eed8; color: #3a7850; }
 .shopping-imp-badge--necessidade { background: #f4e4cc; color: #a07030; }
 .shopping-imp-badge--urgente  { background: #f2dada; color: #a04040; }
 
@@ -2147,8 +2147,8 @@ div.page-textarea[contenteditable] ul.todo-list li.todo-done { text-decoration: 
   font-weight: 600;
 }
 .imp-dropdown-opt:hover { filter: brightness(0.95); }
-.imp-dropdown-opt--luxo    { background: #daeef0; color: #4a9098; }
-.imp-dropdown-opt--conforto { background: #ece6d2; color: #8a7040; }
+.imp-dropdown-opt--luxo    { background: #dde8f2; color: #4a6a9a; }
+.imp-dropdown-opt--conforto { background: #d4eed8; color: #3a7850; }
 .imp-dropdown-opt--necessidade { background: #f4e4cc; color: #a07030; }
 .imp-dropdown-opt--urgente  { background: #f2dada; color: #a04040; }
 

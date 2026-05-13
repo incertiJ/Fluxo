@@ -2,9 +2,7 @@
 
 Memória de sessão. Atualize ao final de cada sessão antes de resetar o chat.
 
-Combina dois papéis:
-- **Snapshot vivo**: status atual, arquivos, pendências, dúvidas
-- **Decisions Log** (append-only): histórico de decisões pra evitar revisitar
+> **TOKEN MINIMIZATION** — Respostas sempre mínimas. Minimizar consumo de tokens em toda interação. Sem repetição, sem sumários desnecessários. Uma frase onde cabe uma frase.
 
 ---
 
@@ -13,254 +11,207 @@ Combina dois papéis:
 **Fluxo** — PWA estático (HTML/CSS/JS puro, sem build) de gestão pessoal: tarefas, compras, notas. Tema pastel "Calm / Natural / Orgânico". Storage em `localStorage`. Sem backend.
 
 **Repo**: `incertij/fluxo`
-**Branch de trabalho atual**: `claude/fix-bugs-add-features-QQVWY`
+**Branch de trabalho**: `claude/fix-bugs-add-features-QQVWY` ← NUNCA mudar sem permissão
 **Branch de deploy**: `claude/fluxo-v2`
-**Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
-**Versão atual**: `6.8`
+**Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`
+**Versão atual**: `7.3`
+**SW cache**: `fluxo-v21`
 
-> **REGRA DE VERSÃO**: TODA MODIFICAÇÃO NO CÓDIGO incrementa a versão. +0.1 para feature/refactor relevante. +0.01 para bugfix/ajuste (pode fazer sem perguntar). +1.00 (reset decimal) para refactor estrutural — **sempre perguntar ao usuário antes de fazer bump +1.00**.
+> **REGRA DE VERSÃO**: TODA modificação no código incrementa a versão. +0.01 bugfix, +0.1 feature, +1.0 estrutural (confirmar antes).
 
-> **REGRA DE CHANGELOG**: Toda versão DEVE ter entrada em `CHANGELOG` no `app.js` com **todas** as mudanças implementadas. Usuário acessa pelo badge de versão para avaliar cada item.
-
-> **REGRA DE RESPOSTAS**: Respostas sempre mínimas. Minimizar tokens. Sem repetição, sem sumários desnecessários.
+> **REGRA DE CHANGELOG**: Toda versão tem entrada em `CHANGELOG` no `app.js`. Usuário acessa pelo badge de versão.
 
 ---
 
 ## Identidade Visual
 
 - **Identidade**: Calm / Natural / Orgânico
-- **Dark mode**: Mesma identidade, cores adaptadas (não inverte — usa `prefers-color-scheme` + override manual `data-theme`)
+- **Dark mode**: `prefers-color-scheme` + override manual `data-theme`
 
-### Tokens CSS — Light mode
+### Tokens CSS — Light
 ```
---bg: #f7f3ec          (areia quente)
---surface: #ffffff
---surface-2: #fbf6ec
---surface-3: #f0e9d9
---border: #e6dfd2
---border-strong: #d8cfbd
---text: #2d3a3a        (verde escuro)
---text-dim: #7a8585
---text-soft: #94a09f
---accent: #8ec9c1      (teal pastel)
---accent-2: #b3d9c9
---accent-3: #d4e7d8
+--bg: #f7f3ec          --surface: #ffffff       --surface-2: #fbf6ec
+--surface-3: #f0e9d9   --border: #e6dfd2         --border-strong: #d8cfbd
+--text: #2d3a3a        --text-dim: #7a8585       --text-soft: #94a09f
+--accent: #8ec9c1      --accent-2: #b3d9c9       --accent-3: #d4e7d8
 ```
 
-### Tokens CSS — Dark mode
+### Tokens CSS — Dark
 ```
---bg: #1a2222
---surface: #232c2c
---surface-2: #2a3434
---surface-3: #344040
---border: #3a4848
---border-strong: #4a5858
---text: #e6ece9
---text-dim: #a4b0ae
---text-soft: #828d8b
---accent: #8ec9c1      (mesmo accent)
+--bg: #1a2222    --surface: #232c2c    --surface-2: #2a3434
+--surface-3: #344040    --border: #3a4848    --border-strong: #4a5858
+--text: #e6ece9    --text-dim: #a4b0ae    --accent: #8ec9c1
 ```
 
-### Importância — tints (light)
+### Importância — badges de compras
 ```
-low:  --imp-low-tint: #dde8f2  --imp-low: #8eb0cc
-mid:  --imp-mid-tint: #ece6d2  --imp-mid: #b9a27e
-high: --imp-high-tint: #f4e4cc --imp-high: #d0a070
-crit: --imp-crit-tint: #f2dada --imp-crit: #c87878
+luxo:        tint #dde8f2 / text #4a6a9a  (azul)
+conforto:    tint #d4eed8 / text #3a7850  (verde)
+necessidade: tint #f4e4cc / text #a07030  (laranja)
+urgente:     tint #f2dada / text #a04040  (vermelho)
 ```
 
-### TAG_COLORS (16 cores, lightest→darkest)
+### TAG_COLORS (16, lightest→darkest)
 ```
-#f4f0e8 creme · #f0d898 amarelo pastel · #c8a040 dourado★ · #d4e890 lima
-#68b888 verde★ · #90dcd4 menta · #6a9ec8 azul★ · #c0a8e8 lilás
-#f4a8b8 rosa pastel · #d47878 salmão★ · #b89870 caramelo · #70a870 musgo
-#5878a8 ardósia · #906888 ameixa · #504840 marrom escuro · #282828 preto fosco
+#f4f0e8 · #f0d898 · #c8a040★ · #d4e890 · #68b888★ · #90dcd4
+#6a9ec8★ · #c0a8e8 · #f4a8b8 · #d47878★ · #b89870 · #70a870
+#5878a8 · #906888 · #504840 · #282828
 ```
-★ = âncoras usadas no EDITOR_COLORS
+★ = âncoras do EDITOR_COLORS
 
 ### EDITOR_COLORS (notas)
 ```js
-[
-  { hex: "default", label: "Padrão" },
-  { hex: "#d47878", label: "Vermelho" },
-  { hex: "#6a9ec8", label: "Azul" },
-  { hex: "#68b888", label: "Verde" },
-  { hex: "#c8a040", label: "Amarelo" },
-]
+[{hex:"default"},{hex:"#d47878"},{hex:"#6a9ec8"},{hex:"#68b888"},{hex:"#c8a040"}]
 ```
-
----
-
-## Padrões de Componente
-
-### Checkboxes / Radios
-TODOS os `<input type="checkbox">` e `<input type="radio">` seguem estilo global em `styles.css`. Nunca `accent-color`, nunca `appearance: auto`, nunca override por componente.
-
-### Ícones de ação
-Apenas contorno (`border: 1.5px solid var(--border-strong)`), fundo transparente. Nunca background colorido. Exemplos: `.mic-inline`, `.shopping-cat-edit`.
-
-### Text inputs
-Sempre: `background: var(--surface-2)`, `border: 1px solid var(--border)`, `color: var(--text)`, `border-radius: 10px`, `padding: 10px 12px`, `font-size: 1rem`. Wrappear em `.field`.
-
-### Seções colapsáveis
-Clique registrado no `.section-hdr` inteiro. Seta = `<span pointer-events: none>`. Estado em `state.homeCollapsed[key]`.
-
-### Dropdowns flutuantes
-Sempre fechar ao clicar fora: `setTimeout(10)` + `document.addEventListener("click", handler)` que verifica `wrap.contains(e.target)`.
-
-### Notificações
-SEMPRE via Service Worker (`navigator.serviceWorker.ready.then(reg => reg.showNotification(...))`). NUNCA `new Notification()` — lança exceção no Android Chrome.
-
-### FAB (Floating Action Button)
-`position: fixed; bottom: 24px; right: 18px`. Contexto-aware por aba. Notes page = "Salvar".
 
 ---
 
 ## Arquitetura
 
-| Arquivo | Propósito |
-|---|---|
-| `app.js` | Toda a lógica da aplicação (~2500 linhas) |
-| `styles.css` | Estilos globais + componentes (~2000 linhas) |
-| `index.html` | Estrutura HTML (~430 linhas) |
-| `sw.js` | Service Worker: cache + notificações agendadas |
-| `manifest.json` | PWA manifest |
-| `icon.svg` | Ícone do app |
+| Arquivo | Linhas aprox. | Propósito |
+|---|---|---|
+| `app.js` | ~3400 | Toda lógica do app |
+| `styles.css` | ~2200 | Estilos globais + componentes |
+| `index.html` | ~430 | Estrutura HTML |
+| `sw.js` | ~120 | Service Worker: cache + notificações |
+| `manifest.json` | — | PWA manifest |
+| `icon.svg` | — | Ícone (ondas, gradiente pastel) |
 
-### Storage
-- `fluxo/v2` — dados do app (tasks, shopping, notes, settings)
-- `fluxo/notified` — Set de IDs de notificações já exibidas
-- `fluxo/changelog-checks` — checkboxes do changelog
-- `fluxo/auth` — `{ pin: sha256hash, webAuthnCredId? }`
-- `fluxo-v14` — cache do SW (assets estáticos)
-- `fluxo-notif` — cache do SW (scheduled-items, persiste entre restarts)
-- `fluxo/icon-png` — localStorage: PNG 192×192 do ícone para notificações
-- `fluxo/badge-png-v2` — localStorage: PNG 96×96 branco/monocromático para badge (v2 = monochrome)
+### Storage keys
+```
+fluxo/v2          — dados do app (tasks, shopping, notes, settings)
+fluxo/notified    — Set de IDs de notificações já exibidas
+fluxo/changelog-checks — checkboxes do changelog
+fluxo/auth        — { pin: sha256hash, webAuthnCredId? }
+fluxo/icon-png    — PNG 192×192 para notificações (gerado em initApp)
+fluxo/badge-png-v3 — PNG 96×96 monochrome badge (ondas brancas sem fundo)
+fluxo-v21         — cache SW (assets estáticos)
+fluxo-notif       — cache SW (scheduled-items persistidos)
+```
+
+### state (objeto global)
+```js
+{
+  tasks, tags, shopping: { categories: [{id, name, color, collapsed, items:[]}] },
+  notes: { notebooks: [{id, name, color, collapsed, pages:[]}] },
+  notifSchedule, appTheme, userName,
+  homeCollapsed: { calendar, overdue, reminder, today, week, later, done },
+  view: "home"|"shopping"|"notes"
+}
+```
 
 ---
 
-## Status Atual — v6.6
+## Navegação (Back gesture — Android)
 
-### Aba Tarefas
-- Calendário mini: 35 células (5×7), dots coloridos por importância, swipe horizontal muda mês
-- Dia de hoje: pré-selecionado ao abrir; clique em dia sem tarefas só seleciona (sem modal)
-- Clique em dia COM tarefas: abre popup de tarefas do dia
-- Seção "Feitas": tarefas `oneoff` completas, com botão ✕ para remoção permanente
-- Ícone de pontual: `𝟏` (U+1D7CF — Mathematical Bold Digit One)
-- Campo "Descrição" → "Observações (opcional)"
-- Importância: tints levemente escurecidos em relação a v5
+**Invariante**: `popstate` sempre faz `history.pushState` ao final (exceto `_exitPending`).
 
-### Aba Compras
-- FAB `+` abre modal "Adicionar novo item"
-- Header da categoria: click = expande/colapsa; long press = edição
-- Nome do item: click = edição inline
-- Enter no campo "Adicionar item" não pula para outro campo (doAdd sem refocus)
+```
+popstate dispara
+  ├─ _exitPending? → limpa flag, retorna (sem pushState) → próximo back fecha PWA
+  ├─ _dialogShowing? → fecha diálogo, _dialogShowing=false → pushState
+  ├─ closeLastModal() retornou true? → pushState
+  ├─ collapseLowestExpandedContainer() retornou true? → pushState
+  └─ else → showExitConfirmDialog() → pushState
+```
 
-### Aba Notas
-- Cadernos com cor; long press = editar; páginas com cor do caderno no nome
-- Editor WYSIWYG (contenteditable + execCommand): negrito, itálico, título (h1), lista, cor
-- Toolbar: `[T serif]` `[N bold]` `[I skewed]` `[● Cor]` `[☰ Lista]`
-- Paleta de cores editor: 4 âncoras do TAG_COLORS (#d47878/#6a9ec8/#68b888/#c8a040) + padrão
-- Cor do botão ● Cor resetada ao abrir qualquer página (fix: colorDot.style.color = "" em openNotePage)
-- Linhas de caderno: `line-height: 2em`, texto acima da linha, `padding-top: 14px`
-- Contagem de linhas não-vazias exibida no card da página (ex: "12 mai · 4 linhas")
-- Botão Salvar FAB: fixo bottom-right, oculto quando teclado está aberto (via `visualViewport`)
-- Página de nota: ocupa 100dvh, sem border-radius, sem animação de entrada (evita salto da tab bar)
+**Containers colapsáveis** (`collapseLowestExpandedContainer`):
+- Usa `querySelectorAll('[data-section][data-expanded="1"]')` (seções home)
+- Usa `querySelectorAll('[data-cat-id][data-expanded="1"]')` (headers de categoria shopping)
+- Usa `querySelectorAll('[data-nb-id][data-expanded="1"]')` (headers de caderno)
+- Ordena por `getBoundingClientRect().bottom` desc → colapsa o mais baixo
+- Atributo `data-expanded="1"/"0"` setado em: `buildCalendarSection`, `makeHomeSection`, categoria header, notebook header
 
-### Navegação
-- Swipe lateral: troca abas (Tarefas ↔ Compras ↔ Notas)
-- Gesto back (Android): fecha modal aberto, ou pergunta saída via `popstate`
-- Sem edge-swipe toast legado
+---
+
+## Features por aba
+
+### Tarefas (home)
+- Seções: Lembretes, Atrasadas, Hoje, Próxima semana, Mais tarde, Feitas
+- Mini-calendário: 35 células, dots por score de importância, swipe muda mês
+- Filtros: Importância / Categoria / Frequência (dropdowns)
+- Importância: 4 níveis (baixa/média/alta/crítica)
+- Tipos: Pontual (oneoff) / Rotina (routine)
+
+### Compras (shopping)
+- Categorias colapsáveis; long press = editar
+- Itens com badge de importância: luxo/conforto/necessidade/urgente
+- Swipe-to-delete em itens
+- Enter no campo de adicionar item = confirma (via `<form>` submit)
+
+### Notas (notes)
+- Cadernos + páginas; cor por caderno
+- Editor WYSIWYG (contenteditable + execCommand)
+- Toolbar: `[T serif]` `[N bold]` `[I]` `[● Cor]` `[☰ Lista]`
+- colorDot rastreia cor do cursor via `selectionchange`
+- Fundo opaco ao abrir página (evita ver a aba de notas atrás)
+
+### Notificações
+- Agendadas via SW (schedule message + rescheduleAll)
+- Ícone: PNG 192×192 gerado por Canvas a partir do icon.svg
+- Badge: PNG 96×96 ondas brancas sobre fundo transparente (monochrome)
+- Gerado em `initApp` via Canvas + SVG inline (sem `<rect>` de fundo)
 
 ### Auth
 - PIN 4 dígitos (SHA-256) + biometria opcional (WebAuthn platform)
 
-### Notificações
-- Agendamento via SW (`schedule` message + `rescheduleAll`)
-- SW v14: cache `fluxo-v14`, mostra imediatamente notificações já vencidas ao receber schedule
-- Badge: PNG 96×96 branco/silhueta (source-atop #ffffff sobre o SVG renderizado)
-- **Limitação conhecida**: setTimeout no SW não é confiável com app fechada + Doze mode. Sem servidor de push, não há garantia de entrega. Notificações chegam quando o SW é reativado por fetch (rede).
+---
+
+## Padrões de Componente
+
+| Componente | Regra |
+|---|---|
+| Checkbox/Radio | Estilo global em styles.css. Nunca `accent-color`, nunca override por componente |
+| Ícones de ação | Só contorno (`border: 1.5px solid var(--border-strong)`), fundo transparente |
+| Text inputs | `background: var(--surface-2)`, `border: 1px solid var(--border)`, `border-radius: 10px`, `padding: 10px 12px`, wrappear em `.field` |
+| Seções colapsáveis | Clique no `.section-hdr` inteiro. Seta = `<span pointer-events:none>`. Estado em `state.homeCollapsed[key]` |
+| Dropdowns | Fechar ao clicar fora: `setTimeout(10)` + click listener com `wrap.contains(e.target)` |
+| Notificações | Sempre via SW (`reg.showNotification`). Nunca `new Notification()` |
+| FAB | `position: fixed; bottom: 24px; right: 18px`. Contexto-aware por aba |
 
 ---
 
-## Pendências / Bugs a Verificar
+## Pendências / Bugs conhecidos
 
 | # | Item |
 |---|---|
-| 1 | Notificações: validar se badge branco aparece na barra de status (alguns launchers ignoram o campo badge) |
-| 2 | `visualViewport` no iOS: teclado não reduz viewport no iOS — save FAB pode não ocultar |
-| 3 | Tab bar jump: validar se correção (sem chamada imediata + animation:none) resolveu no dispositivo |
-| 4 | TAG_COLORS escuras (#504840, #8b3570): verificar legibilidade do texto sobreposto em dark mode |
-| 5 | Notificações com app fechada: limitação de plataforma (Doze mode termina SW). Sem server de push = sem garantia. |
+| 1 | Notificações com app fechada: limitação de plataforma (Doze mode). Sem server push = sem garantia |
+| 2 | `visualViewport` no iOS: teclado não reduz viewport → save FAB pode não ocultar |
+| 3 | Badge na barra de status: alguns launchers ignoram o campo `badge` |
 
 ---
 
-## Histórico de Branches
+## Decisões Log (append-only)
 
-- `claude/task-manager-voice-input-eisIH` — v1, "Minhas Tarefas"
-- `claude/fluxo-v2` — v2/v3/v4 — branch de deploy (GitHub Pages)
-- `claude/fix-mobile-cache-update-z3LsR` — v5.00–v6.01
-- `claude/review-project-structure-zHTqb` — v6.4–v6.5 — branch de desenvolvimento atual
+- Stack: HTML/CSS/JS puro, sem build, sem backend
+- Storage: `localStorage`, chave `fluxo/v2`
+- Notificações: SW-only (nunca `new Notification()`)
+- Back gesture: `popstate` handler (invariante: sempre pushState, exceto _exitPending)
+- data-expanded: atributo nos containers para collapseLowestExpandedContainer (v7.2+)
+- Badge monocromático: SVG inline com só as ondas (sem `<rect>` de fundo) → PNG via Canvas
+- Shopping Enter: `<form>` + submit event (cross-platform, não pula para próximo campo)
+- homeCollapsed: persistido em localStorage (save/load)
+- Changelog: modal fullscreen (como notas-page-modal)
+- Versão: APP_VERSION em app.js + badge header + CHANGELOG object
+
+---
+
+## Erros já cometidos / armadilhas
+
+- `display: flex` + `[hidden]`: flex sobrescreve hidden. Usar `style.display` diretamente.
+- `new Notification()` no Android Chrome: lança exceção. Sempre via SW.
+- Cache SW não invalida: sempre bumpar `CACHE` em sw.js ao mudar JS/CSS.
+- Badge com `<rect>` de fundo: source-atop sobre rect = quadrado preto. Usar só paths.
+- `data-cat-id` duplicado: header E add-row tinham o mesmo atributo → `querySelector` pegava errado. Fix: só header tem `data-expanded`.
+- Back gesture sem invariante: history se esgota → dialog some após cancelar. Fix: sempre pushState no popstate.
 
 ---
 
 ## Como retomar em nova sessão
 
-1. Leia `CLAUDE_INSTRUCTIONS.md` — todas as 15 regras.
+1. Leia `CLAUDE_INSTRUCTIONS.md` (todas as regras — especialmente 15 e 16).
 2. Leia este arquivo inteiro.
-3. Toda modificação de código = versão incrementa (regra 9). +1.00 → pedir confirmação.
-4. Em **toda mensagem**: fazer ≥5 perguntas antes de codar (regra 15).
-5. Após respostas: propor plano → aguardar "ok prossiga" → codar (regra 14).
-6. Atualize este arquivo antes de fechar a sessão.
-
----
-
-## Decisions Log (append-only)
-
-### 2026-04
-- Stack: HTML/CSS/JS puro, sem build, sem backend
-- Storage: `localStorage`, chave `fluxo/v2`
-- Áudio: parser pt-BR via regex/keywords
-- Notificações: por tarefa + digests 09h/22h
-- Rotinas: renovação manual após conclusão
-- Importância: 4 níveis (baixa/média/alta/crítica)
-
-### 2026-05 (v4–v5)
-- Calendário removido como aba; mini-cal embutido na aba Tarefas
-- Seção "Sem data" removida → itens sem data aparecem em "Mais tarde"
-- Filtros: Importância / Categoria / Frequência (dropdowns)
-- Notas: cadernos + páginas; cor via TAG_COLORS; markdown próprio
-- Back gesture: `popstate` handler (não mais edge-swipe)
-- Regra 14 adicionada a CLAUDE_INSTRUCTIONS.md
-
-### 2026-05 (v6)
-- Editor de notas migrado para WYSIWYG (contenteditable + execCommand)
-- Identidade visual confirmada: Calm / Natural / Orgânico
-- Dark mode: mesma identidade, cores adaptadas
-- Ícone pontual: 𝟏 (U+1D7CF)
-- Botão título: T serifado (Georgia bold)
-- Botão itálico: I inclinado 15° (skewX)
-- Cores editor: 4 âncoras fixas (#d47878/#6a9ec8/#68b888/#c8a040) + padrão (v6.4→)
-- TAG_COLORS migrou para 16 cores (gelo a preto fosco) com 4 âncoras do editor (v6.5)
-- Tints de importância: levemente escurecidos (v6.01)
-- Calendar day cells: aspect-ratio 1 (quadrado, ~metade da altura anterior)
-- Notes save FAB: visualViewport para detectar teclado mobile (sem chamada imediata desde v6.5)
-- SW cache: fluxo-v14 (bumped em v6.6)
-- Notificações: badge monocromático (branco/silhueta) 96×96 via Canvas + source-atop (v6.6)
-- Cor do editor: resetada no openNotePage (colorDot fix, v6.6)
-- Shopping Enter: doAdd(false) — sem refocus pós-render (v6.6)
-
----
-
-## Erros já cometidos / armadilhas a evitar
-
-- **`display: flex` + `[hidden]`**: flex sobrescreve hidden. Usar `style.display` diretamente, não `element.hidden`.
-- **`new Notification()` no Android Chrome**: lança exceção. Sempre via SW.
-- **Cache SW não invalida**: sempre bumpar o nome do cache ao mudar JS/CSS.
-- **Curly quotes em strings JS**: sed/substituição pode introduzir `"` e `"` que quebram strings. Revisar após substituições em massa.
-- **Auto-focus em input dentro de modal**: dispara teclado virtual indesejado. Evitar.
-- **Checkbox/radio**: nunca `accent-color`, nunca override por componente.
-- **Ícones**: nunca background colorido. Só contorno.
-- **Inputs fora do `.field`**: não herdam estilos globais automaticamente.
-- **Seções colapsáveis**: clique no `.section-hdr` inteiro, seta é passiva.
-- **Dropdowns sem fechamento externo**: `setTimeout(10)` + click listener com `contains()`.
+3. Toda modificação = versão incrementa (regra 9).
+4. Em toda mensagem: ≥5 perguntas antes de codar (regra 15).
+5. Respostas sempre mínimas — minimizar tokens (regra 16).
+6. Branch FIXA: `claude/fix-bugs-add-features-QQVWY`. Nunca mudar.

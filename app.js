@@ -3,10 +3,16 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.2";
+const APP_VERSION = "7.3";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "7.3": [
+    "Navegação: back colapsa container mais baixo (data-expanded) até não restar nenhum, então exibe diálogo",
+    "Navegação: diálogo de saída reaparece corretamente após cancelar ou fechar com back",
+    "Navegação: pressionar back enquanto diálogo está visível fecha o diálogo e mantém o app aberto",
+    "Navegação: invariante — popstate sempre restaura entrada no histórico (exceto ao confirmar saída)",
+  ],
   "7.2": [
     "Navegação: containers têm atributo data-expanded indicando estado aberto/fechado",
     "Navegação: back colapsa container mais baixo visível até não restar nenhum, então exibe diálogo de saída",
@@ -3268,7 +3274,6 @@ let _dialogShowing = false;
 let _exitPending = false;
 
 function showExitConfirmDialog() {
-  if (_dialogShowing) return;
   _dialogShowing = true;
   const overlay = document.createElement("div");
   overlay.id = "exit-confirm-overlay";
@@ -3282,18 +3287,14 @@ function showExitConfirmDialog() {
   btnRow.style.cssText = "display:flex;gap:12px";
   const cancelBtn = el("button", { type: "button" }, "Cancelar");
   cancelBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:0.95rem;cursor:pointer";
-  cancelBtn.addEventListener("click", () => {
-    overlay.remove();
-    _dialogShowing = false;
-    // pushState already done before showing dialog — app is still in history
-  });
+  cancelBtn.addEventListener("click", () => { overlay.remove(); _dialogShowing = false; });
   const exitBtn = el("button", { type: "button" }, "Sair");
   exitBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:0.95rem;cursor:pointer";
   exitBtn.addEventListener("click", () => {
     overlay.remove();
     _dialogShowing = false;
     _exitPending = true;
-    history.back(); // consume the pushState we added — next back closes PWA
+    history.back(); // consumes the entry pushed by popstate invariant → next back closes PWA
   });
   btnRow.append(cancelBtn, exitBtn);
   box.append(msg, btnRow);
@@ -3307,25 +3308,18 @@ async function initApp() {
   checkDueNotifications();
   scheduleNotifications();
 
-  // Intercept system back gesture (Android) to close modals or confirm exit
+  // Intercept system back gesture (Android).
+  // Invariant: popstate ALWAYS pushes state back (keeps app alive), except when _exitPending.
   history.pushState({ fluxo: true }, "");
   window.addEventListener("popstate", () => {
     if (_exitPending) { _exitPending = false; return; }
     if (_dialogShowing) {
-      const d = document.getElementById("exit-confirm-overlay");
-      if (d) d.remove();
+      document.getElementById("exit-confirm-overlay")?.remove();
       _dialogShowing = false;
-      // Don't push — next back will close PWA (dialog's pushState was already consumed)
-      return;
-    }
-    if (closeLastModal()) {
-      history.pushState({ fluxo: true }, "");
-    } else if (collapseLowestExpandedContainer()) {
-      history.pushState({ fluxo: true }, "");
-    } else {
-      history.pushState({ fluxo: true }, ""); // keep app alive while dialog is shown
+    } else if (!closeLastModal() && !collapseLowestExpandedContainer()) {
       showExitConfirmDialog();
     }
+    history.pushState({ fluxo: true }, ""); // always restore — PWA only closes via _exitPending
   });
   setInterval(() => {
     checkDueNotifications();

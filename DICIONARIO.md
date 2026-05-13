@@ -97,7 +97,7 @@ O score determina a cor do dot (bolinha) no calendário:
 
 **Swipe** — Gesto de deslizar horizontalmente para trocar de aba (Tarefas ↔ Compras ↔ Notas).
 
-**Back swipe** — Gesto de deslizar da borda direita para a esquerda. Fecha o modal aberto (se houver), ou exibe toast de saída.
+**Back swipe / Back gesture** — Gesto de voltar (Android). Tem 3 funções em ordem: (1) fecha modal/tela aberta, (2) colapsa o container mais baixo com `data-expanded="1"`, (3) exibe diálogo de saída. O app nunca fecha sem confirmação.
 
 **PWA** — Progressive Web App. O Fluxo roda no navegador mas se comporta como app nativo: pode ser instalado na tela inicial, funciona offline, e suporta notificações.
 
@@ -107,7 +107,7 @@ O score determina a cor do dot (bolinha) no calendário:
 
 **Service Worker (SW)** — Script que roda em background no navegador para habilitar modo offline e notificações push por timer (setTimeout).
 
-**Cache fluxo-v8** — Nome da versão atual do cache do Service Worker. Ao mudar a versão, o SW antigo é substituído.
+**Cache fluxo-v21** — Nome da versão atual do cache do Service Worker. Bumpar sempre que JS/CSS mudar.
 
 **fluxo/auth** — Chave no localStorage que armazena os dados de autenticação PIN (hash SHA-256 do PIN + salt).
 

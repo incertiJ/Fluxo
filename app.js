@@ -3,10 +3,29 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.7";
+const APP_VERSION = "6.8";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "6.8": [
+    "Navegação: gesto back colapsa containers expandidos (incluindo calendário e lembrete abertos por padrão)",
+    "Navegação: gesto back fecha página de nota aberta e salva automaticamente",
+    "Compras: importância de item — badge colorido (Luxo/Conforto/Necessidade/Urgente)",
+    "Compras: dropdown para escolher importância ao tocar no badge",
+    "Compras: sort por importância ao abrir categoria (Urgente primeiro, comprados no fim)",
+    "Compras: deslize para esquerda apaga item (mesmo padrão das tarefas)",
+    "Compras: contador corrigido — mostra itens comprados/total (era itens pendentes/total)",
+    "Compras: Enter fecha teclado sem pular para outro campo de texto",
+    "Notas: páginas salvando corretamente ao clicar Salvar",
+    "Notas: to-do list com checkboxes clicáveis — botão ☑ na toolbar",
+    "Notas: Enter em to-do list cria novo item com checkbox automaticamente",
+    "Notas: botão de lista usa ícone de ponto+linha (sem texto)",
+    "Notas: título não desce em direção ao teclado ao abrir página nova",
+    "Notas: cor de texto da toolbar resetada ao abrir qualquer página",
+    "Notas: bullet list alinhada às linhas da pauta do caderno",
+    "Cores: marrom escuro agora é a última cor da paleta (mais escuro = último)",
+    "Notificações: ícone do Fluxo regenerado se cache inválido detectado",
+  ],
   "6.6": [
     "Design: cor escura da paleta trocada de preto fosco por vinho (#8b3570)",
     "Notificações: badge monocromático (branco) da logo Fluxo na barra de status",
@@ -973,13 +992,32 @@ function renderShoppingCategory(cat) {
         inp.select();
       });
 
-      // Importance badge (cycles on click)
+      // Importance badge → dropdown to pick level
       const badge = el("button", { type: "button", class: `shopping-imp-badge shopping-imp-badge--${imp}` }, IMP_LABELS[imp]);
       badge.addEventListener("click", e => {
         e.stopPropagation();
-        cat.items[i].importance = IMP_CYCLE[imp];
-        save();
-        render();
+        // Remove any open imp-dropdowns
+        document.querySelectorAll(".imp-dropdown").forEach(d => d.remove());
+        const drop = el("div", { class: "imp-dropdown" });
+        IMP_ORDER.forEach(level => {
+          const opt = el("button", { type: "button", class: `imp-dropdown-opt imp-dropdown-opt--${level}` }, IMP_LABELS[level]);
+          opt.addEventListener("mousedown", ev => { ev.preventDefault(); ev.stopPropagation(); });
+          opt.addEventListener("click", ev => {
+            ev.stopPropagation();
+            cat.items[i].importance = level;
+            save(); render();
+            drop.remove();
+          });
+          drop.appendChild(opt);
+        });
+        const r = badge.getBoundingClientRect();
+        drop.style.top = (r.bottom + 4) + "px";
+        drop.style.right = (window.innerWidth - r.right) + "px";
+        document.body.appendChild(drop);
+        setTimeout(() => {
+          const close = ev => { if (!drop.contains(ev.target)) { drop.remove(); document.removeEventListener("click", close); } };
+          document.addEventListener("click", close);
+        }, 10);
       });
 
       row.append(cb, nameEl, badge);
@@ -1035,11 +1073,19 @@ function renderShoppingCategory(cat) {
       input.value = "";
       save();
       render();
-      if (refocus) refocusAfterRender();
+      if (refocus) {
+        refocusAfterRender();
+      } else {
+        // After render, blur any input that received auto-focus
+        requestAnimationFrame(() => {
+          const a = document.activeElement;
+          if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) a.blur();
+        });
+      }
     };
     const addItemBtn = el("button", { type: "button", class: "ghost-btn" }, "+");
     addItemBtn.addEventListener("click", () => doAdd(false));
-    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.blur(); doAdd(false); } });
+    input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); doAdd(false); } });
     addRow.append(input, addItemBtn);
     body.appendChild(addRow);
     card.appendChild(body);
@@ -1344,12 +1390,6 @@ function openNotePage(pageId, notebookId = null) {
   document.getElementById("page-title-input").value = page?.name || "";
   const editor = document.getElementById("page-content-input");
   editor.innerHTML = page?.content || "";
-  // Append a reset-color sentinel so new typing defaults to theme color
-  const sentinel = document.createElement("span");
-  sentinel.dataset.colorReset = "1";
-  sentinel.style.color = "inherit";
-  sentinel.textContent = "​"; // zero-width space
-  editor.appendChild(sentinel);
   document.getElementById("notes-page-modal").dataset.notebookId = notebookId || page?.notebookId || "";
   document.getElementById("notes-page-modal").hidden = false;
   // Reset color dot and close picker
@@ -1401,10 +1441,7 @@ function teardownPageSaveFab() {
 
 function saveNotePage() {
   const name = document.getElementById("page-title-input").value.trim() || "Sem título";
-  const editorEl = document.getElementById("page-content-input");
-  // Remove color-reset sentinels before saving
-  editorEl.querySelectorAll("[data-color-reset]").forEach(n => n.remove());
-  const content = editorEl.innerHTML;
+  const content = document.getElementById("page-content-input").innerHTML;
   const notebookId = document.getElementById("notes-page-modal").dataset.notebookId;
 
   if (state.editingPageId) {
@@ -1467,6 +1504,7 @@ function insertTodoList() {
 }
 
 function setupTodoCheckboxes(editor) {
+  // Toggle checkbox on click
   editor.addEventListener("click", e => {
     const check = e.target.closest(".todo-check");
     if (!check) return;
@@ -1474,6 +1512,30 @@ function setupTodoCheckboxes(editor) {
     const done = check.textContent === "☑";
     check.textContent = done ? "☐" : "☑";
     check.closest("li")?.classList.toggle("todo-done", !done);
+  });
+
+  // Enter in todo-list li creates a new checkbox item
+  editor.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    const sel = window.getSelection();
+    if (!sel?.rangeCount) return;
+    const node = sel.anchorNode;
+    const el = node.nodeType === 3 ? node.parentElement : node;
+    const li = el.closest?.("li");
+    if (!li?.closest(".todo-list")) return;
+    e.preventDefault();
+    const newLi = document.createElement("li");
+    const check = document.createElement("span");
+    check.className = "todo-check";
+    check.textContent = "☐";
+    const nbsp = document.createTextNode(" ");
+    newLi.append(check, nbsp);
+    li.after(newLi);
+    const range = document.createRange();
+    range.setStart(nbsp, 1);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
   });
 }
 
@@ -3097,33 +3159,32 @@ async function registerSW() {
 function collapseLowestExpandedContainer() {
   const candidates = [];
 
-  // Task sections (data-section with ▼)
-  document.querySelectorAll("[data-section]").forEach(sec => {
-    const toggle = sec.querySelector(".section-toggle");
-    if (toggle && toggle.textContent === "▼") {
-      candidates.push({ el: sec, key: sec.dataset.section, type: "section" });
+  // Task sections — check state directly (reliable even for sections open from start)
+  for (const key of Object.keys(state.homeCollapsed)) {
+    if (!state.homeCollapsed[key]) {
+      const secEl = document.querySelector(`[data-section="${key}"]`);
+      if (secEl) candidates.push({ el: secEl, type: "section", key });
     }
-  });
+  }
 
-  // Shopping categories (data-cat-id with ▼)
-  document.querySelectorAll("[data-cat-id]").forEach(hdr => {
-    const chevron = hdr.querySelector(".shopping-cat-chevron");
-    if (chevron && chevron.textContent === "▼") {
-      candidates.push({ el: hdr, catId: hdr.dataset.catId, type: "cat" });
+  // Shopping categories
+  for (const cat of state.shopping.categories) {
+    if (!cat.collapsed) {
+      const hdrEl = document.querySelector(`[data-cat-id="${cat.id}"]`);
+      if (hdrEl) candidates.push({ el: hdrEl, type: "cat", catId: cat.id });
     }
-  });
+  }
 
-  // Notebooks (data-nb-id with ▼)
-  document.querySelectorAll("[data-nb-id]").forEach(hdr => {
-    const chevron = hdr.querySelector(".shopping-cat-chevron");
-    if (chevron && chevron.textContent === "▼") {
-      candidates.push({ el: hdr, nbId: hdr.dataset.nbId, type: "nb" });
+  // Notebooks
+  for (const nb of state.notes.notebooks) {
+    if (!nb.collapsed) {
+      const hdrEl = document.querySelector(`[data-nb-id="${nb.id}"]`);
+      if (hdrEl) candidates.push({ el: hdrEl, type: "nb", nbId: nb.id });
     }
-  });
+  }
 
   if (!candidates.length) return false;
 
-  // Pick the one lowest on screen (highest bottom coordinate)
   candidates.sort((a, b) => b.el.getBoundingClientRect().bottom - a.el.getBoundingClientRect().bottom);
   const target = candidates[0];
 

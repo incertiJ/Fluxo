@@ -2124,6 +2124,34 @@ div.page-textarea[contenteditable] ul.todo-list li.todo-done { text-decoration: 
 .shopping-imp-badge--necessidade { background: #f4e4cc; color: #a07030; }
 .shopping-imp-badge--urgente  { background: #f2dada; color: #a04040; }
 
+.imp-dropdown {
+  position: fixed;
+  z-index: 500;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 130px;
+}
+.imp-dropdown-opt {
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  text-align: left;
+  font-size: 0.9rem;
+  font-family: inherit;
+  cursor: pointer;
+  font-weight: 600;
+}
+.imp-dropdown-opt:hover { filter: brightness(0.95); }
+.imp-dropdown-opt--luxo    { background: #daeef0; color: #4a9098; }
+.imp-dropdown-opt--conforto { background: #ece6d2; color: #8a7040; }
+.imp-dropdown-opt--necessidade { background: #f4e4cc; color: #a07030; }
+.imp-dropdown-opt--urgente  { background: #f2dada; color: #a04040; }
+
 /* ===== Undo delete toast ===== */
 
 #undo-delete-toast {

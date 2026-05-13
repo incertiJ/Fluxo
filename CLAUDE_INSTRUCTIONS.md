@@ -74,6 +74,7 @@ Quando alterar código existente: forneça apenas o trecho mudado, com contexto 
 - **Mudanças grandes** (nova funcionalidade, refactor significativo, mudança estrutural): adiciona `+1.00` com reset da parte decimal (ex: 3.01 → 4.00, NÃO 4.01). **Antes de fazer bump +1.00, sempre perguntar ao usuário para confirmar.**
 - Toda mudança de versão deve atualizar: `APP_VERSION` em `app.js`, `CLAUDE_STATE.md`.
 - A versão é exibida no badge do header (`version-badge`) e incrementada a cada commit com mudanças.
+- **CHANGELOG obrigatório**: toda versão deve ter uma entrada em `CHANGELOG` no `app.js` listando **todas** as mudanças implementadas (visíveis ao usuário). O usuário acessa via clique no badge de versão e avalia se cada item foi bem aplicado.
 
 ### 10. Workflow Git
 - Sempre trabalhe em feature branch. Nunca commit em `main` sem permissão.
@@ -122,6 +123,10 @@ Esta regra é o comportamento padrão para qualquer nova feature, refactor ou mu
 4. Após respostas: proponha plano de implementação em bullets e aguarde "ok prossiga".
 
 Não pule esta etapa mesmo para pedidos aparentemente simples. Perguntar é mais barato que refazer.
+
+### 16. Respostas mínimas
+
+> **OBRIGATÓRIO**: Respostas devem ser sempre mínimas. Minimizar consumo de tokens. Sem explicações longas, sem repetição do que o usuário escreveu, sem sumários desnecessários. Uma frase onde cabe uma frase. Listas curtas onde cabe lista. Esta é a regra padrão permanente.
 
 ---
 

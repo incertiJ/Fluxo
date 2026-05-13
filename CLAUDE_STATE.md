@@ -13,12 +13,16 @@ Combina dois papéis:
 **Fluxo** — PWA estático (HTML/CSS/JS puro, sem build) de gestão pessoal: tarefas, compras, notas. Tema pastel "Calm / Natural / Orgânico". Storage em `localStorage`. Sem backend.
 
 **Repo**: `incertij/fluxo`
-**Branch de trabalho atual**: `claude/review-project-structure-zHTqb`
+**Branch de trabalho atual**: `claude/fix-bugs-add-features-QQVWY`
 **Branch de deploy**: `claude/fluxo-v2`
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`.
-**Versão atual**: `6.5`
+**Versão atual**: `6.8`
 
 > **REGRA DE VERSÃO**: TODA MODIFICAÇÃO NO CÓDIGO incrementa a versão. +0.1 para feature/refactor relevante. +0.01 para bugfix/ajuste (pode fazer sem perguntar). +1.00 (reset decimal) para refactor estrutural — **sempre perguntar ao usuário antes de fazer bump +1.00**.
+
+> **REGRA DE CHANGELOG**: Toda versão DEVE ter entrada em `CHANGELOG` no `app.js` com **todas** as mudanças implementadas. Usuário acessa pelo badge de versão para avaliar cada item.
+
+> **REGRA DE RESPOSTAS**: Respostas sempre mínimas. Minimizar tokens. Sem repetição, sem sumários desnecessários.
 
 ---
 

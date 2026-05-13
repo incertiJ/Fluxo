@@ -3,10 +3,16 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.1";
+const APP_VERSION = "7.2";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "7.2": [
+    "Navegação: containers têm atributo data-expanded indicando estado aberto/fechado",
+    "Navegação: back colapsa container mais baixo visível até não restar nenhum, então exibe diálogo de saída",
+    "Navegação: diálogo de saída reaparece corretamente após cancelar — não some depois de uma vez",
+    "Navegação: pressionar back enquanto diálogo está visível fecha o diálogo sem sair do app",
+  ],
   "7.1": [
     "Navegação: diálogo de saída aparece corretamente ao pressionar back sem nada aberto",
     "Navegação: cancelar saída funciona — app permanece aberto; Sair libera o gesto natural de fechar",
@@ -474,7 +480,8 @@ function buildCalendarSection() {
   const collapsed = state.homeCollapsed[key];
   const sec = el("section", {
     class: "section section--home" + (collapsed ? " section--collapsed" : ""),
-    "data-section": key
+    "data-section": key,
+    "data-expanded": collapsed ? "0" : "1"
   });
   const hdr = el("div", { class: "section-hdr" });
   hdr.appendChild(el("h2", {}, "Calendário"));
@@ -677,7 +684,8 @@ function makeHomeSection(key, title, tasks, emptyMsg, opts = {}) {
   const collapsed = state.homeCollapsed[key];
   const sec = el("section", {
     class: "section section--home" + (collapsed ? " section--collapsed" : ""),
-    "data-section": key
+    "data-section": key,
+    "data-expanded": collapsed ? "0" : "1"
   });
 
   const hdr = el("div", { class: "section-hdr" });
@@ -942,7 +950,7 @@ function renderShoppingCategory(cat) {
   card.style.setProperty("--cat-bg", hexToRgba(cat.color, 0.13));
   card.style.setProperty("--cat-tint", hexToRgba(cat.color, 0.07));
 
-  const hdr = el("div", { class: "shopping-cat-header", "data-cat-id": cat.id });
+  const hdr = el("div", { class: "shopping-cat-header", "data-cat-id": cat.id, "data-expanded": cat.collapsed ? "0" : "1" });
 
   // Click = expand/collapse
   hdr.addEventListener("click", () => {
@@ -1302,7 +1310,7 @@ function renderNotebook(nb) {
   card.style.setProperty("--nb-color", nb.color);
   card.style.setProperty("--nb-bg", hexToRgba(nb.color, 0.12));
 
-  const hdr = el("div", { class: "notebook-hdr", "data-nb-id": nb.id });
+  const hdr = el("div", { class: "notebook-hdr", "data-nb-id": nb.id, "data-expanded": nb.collapsed ? "0" : "1" });
   hdr.addEventListener("click", () => {
     nb.collapsed = !nb.collapsed;
     save();
@@ -3227,29 +3235,15 @@ async function registerSW() {
 function collapseLowestExpandedContainer() {
   const candidates = [];
 
-  // Task sections — check state directly (reliable even for sections open from start)
-  for (const key of Object.keys(state.homeCollapsed)) {
-    if (!state.homeCollapsed[key]) {
-      const secEl = document.querySelector(`[data-section="${key}"]`);
-      if (secEl) candidates.push({ el: secEl, type: "section", key });
-    }
-  }
-
-  // Shopping categories
-  for (const cat of state.shopping.categories) {
-    if (!cat.collapsed) {
-      const hdrEl = document.querySelector(`[data-cat-id="${cat.id}"]`);
-      if (hdrEl) candidates.push({ el: hdrEl, type: "cat", catId: cat.id });
-    }
-  }
-
-  // Notebooks
-  for (const nb of state.notes.notebooks) {
-    if (!nb.collapsed) {
-      const hdrEl = document.querySelector(`[data-nb-id="${nb.id}"]`);
-      if (hdrEl) candidates.push({ el: hdrEl, type: "nb", nbId: nb.id });
-    }
-  }
+  document.querySelectorAll('[data-section][data-expanded="1"]').forEach(secEl => {
+    candidates.push({ el: secEl, type: "section", key: secEl.dataset.section });
+  });
+  document.querySelectorAll('[data-cat-id][data-expanded="1"]').forEach(hdrEl => {
+    candidates.push({ el: hdrEl, type: "cat", catId: hdrEl.dataset.catId });
+  });
+  document.querySelectorAll('[data-nb-id][data-expanded="1"]').forEach(hdrEl => {
+    candidates.push({ el: hdrEl, type: "nb", nbId: hdrEl.dataset.nbId });
+  });
 
   if (!candidates.length) return false;
 
@@ -3270,8 +3264,12 @@ function collapseLowestExpandedContainer() {
   return true;
 }
 
+let _dialogShowing = false;
+let _exitPending = false;
+
 function showExitConfirmDialog() {
-  if (document.getElementById("exit-confirm-overlay")) return;
+  if (_dialogShowing) return;
+  _dialogShowing = true;
   const overlay = document.createElement("div");
   overlay.id = "exit-confirm-overlay";
   overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center";
@@ -3286,11 +3284,17 @@ function showExitConfirmDialog() {
   cancelBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:0.95rem;cursor:pointer";
   cancelBtn.addEventListener("click", () => {
     overlay.remove();
-    history.pushState({ fluxo: true }, ""); // restore the entry the browser consumed
+    _dialogShowing = false;
+    // pushState already done before showing dialog — app is still in history
   });
   const exitBtn = el("button", { type: "button" }, "Sair");
   exitBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:0.95rem;cursor:pointer";
-  exitBtn.addEventListener("click", () => overlay.remove()); // browser already went back — PWA closes on next gesture
+  exitBtn.addEventListener("click", () => {
+    overlay.remove();
+    _dialogShowing = false;
+    _exitPending = true;
+    history.back(); // consume the pushState we added — next back closes PWA
+  });
   btnRow.append(cancelBtn, exitBtn);
   box.append(msg, btnRow);
   overlay.appendChild(box);
@@ -3306,12 +3310,20 @@ async function initApp() {
   // Intercept system back gesture (Android) to close modals or confirm exit
   history.pushState({ fluxo: true }, "");
   window.addEventListener("popstate", () => {
+    if (_exitPending) { _exitPending = false; return; }
+    if (_dialogShowing) {
+      const d = document.getElementById("exit-confirm-overlay");
+      if (d) d.remove();
+      _dialogShowing = false;
+      // Don't push — next back will close PWA (dialog's pushState was already consumed)
+      return;
+    }
     if (closeLastModal()) {
       history.pushState({ fluxo: true }, "");
     } else if (collapseLowestExpandedContainer()) {
       history.pushState({ fluxo: true }, "");
     } else {
-      // Don't push state — show dialog; Cancel will restore, Sair leaves browser to close PWA
+      history.pushState({ fluxo: true }, ""); // keep app alive while dialog is shown
       showExitConfirmDialog();
     }
   });

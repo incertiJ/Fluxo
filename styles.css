@@ -1685,7 +1685,7 @@ input[type="radio"]:checked::after {
 
 /* ===== Notes page modal ===== */
 
-#notes-page-modal { align-items: flex-start; }
+#notes-page-modal { align-items: flex-start; background: var(--bg); }
 
 .notes-page-content {
   height: 100vh;

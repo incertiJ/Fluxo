@@ -3,10 +3,17 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "6.9";
+const APP_VERSION = "6.91";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "6.91": [
+    "Navegação: diálogo de saída agora aparece corretamente (loop de history resolvido)",
+    "Navegação: múltiplos containers colapsam corretamente — cada gesto back fecha um",
+    "Compras: Enter fecha teclado imediatamente sem selecionar outro campo",
+    "Notas: fundo não aparece mais atrás da página quando o teclado está aberto",
+    "Notificações: ícone removido do botão Testar (evita logo dupla na notificação de teste)",
+  ],
   "6.9": [
     "Navegação: gesto back fecha modal/página aberta antes de colapsar containers",
     "Navegação: página de nota salva automaticamente ao fechar com gesto back",
@@ -1080,12 +1087,13 @@ function renderShoppingCategory(cat) {
       if (!v) return;
       cat.items.push({ id: uid(), name: v, checked: false, importance: "luxo" });
       input.value = "";
+      if (!refocus) input.blur(); // dismiss keyboard before render
       save();
       render();
       if (refocus) {
         refocusAfterRender();
       } else {
-        // After render, blur any input that received auto-focus
+        // Belt-and-suspenders: blur any input auto-focused by browser after render
         setTimeout(() => {
           const a = document.activeElement;
           if (a && (a.tagName === "INPUT" || a.tagName === "TEXTAREA")) a.blur();
@@ -1462,7 +1470,7 @@ function setupPageSaveFab() {
       fab.style.display = keyboardOpen ? "none" : "flex";
       // Shrink modal to visible area so header+toolbar stay at top
       const modalContent = document.querySelector(".notes-page-content");
-      if (modalContent) modalContent.style.height = Math.round(vh * 0.96) + "px";
+      if (modalContent) modalContent.style.height = Math.round(vh) + "px";
     };
     window.visualViewport.addEventListener("resize", _pageSaveFabVVListener);
   }
@@ -2633,7 +2641,7 @@ function renderSettingsBody() {
       const reg = await navigator.serviceWorker.ready;
       await reg.showNotification("Fluxo — Teste", {
         body: "Notificações estão funcionando!",
-        icon: "./icon.svg",
+        badge: _notifBadgeUrl,
         tag: "test-" + Date.now()
       });
       showToast("Notificação enviada");
@@ -3261,12 +3269,18 @@ function showExitConfirmDialog() {
   cancelBtn.addEventListener("click", () => overlay.remove());
   const exitBtn = el("button", { type: "button" }, "Sair");
   exitBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:0.95rem;cursor:pointer";
-  exitBtn.addEventListener("click", () => { overlay.remove(); history.back(); });
+  exitBtn.addEventListener("click", () => {
+    overlay.remove();
+    _exitPending = true;
+    history.back();
+  });
   btnRow.append(cancelBtn, exitBtn);
   box.append(msg, btnRow);
   overlay.appendChild(box);
   document.body.appendChild(overlay);
 }
+
+let _exitPending = false;
 
 async function initApp() {
   await registerSW();
@@ -3277,6 +3291,7 @@ async function initApp() {
   // Intercept system back gesture (Android) to close modals or confirm exit
   history.pushState({ fluxo: true }, "");
   window.addEventListener("popstate", () => {
+    if (_exitPending) { _exitPending = false; return; }
     if (closeLastModal()) {
       history.pushState({ fluxo: true }, "");
     } else if (collapseLowestExpandedContainer()) {

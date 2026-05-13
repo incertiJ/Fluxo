@@ -3,10 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.3";
+const APP_VERSION = "7.4";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "7.4": [
+    "Gesto de borda direita: deslizar da borda direita para esquerda aciona o back (fecha modal, colapsa container ou pergunta saída)",
+    "Gesto de borda direita: separado do swipe de aba — não muda de aba quando parte dos últimos 30px da borda",
+  ],
   "7.3": [
     "Navegação: back colapsa container mais baixo (data-expanded) até não restar nenhum, então exibe diálogo",
     "Navegação: diálogo de saída reaparece corretamente após cancelar ou fechar com back",
@@ -2916,9 +2920,9 @@ function setupUI() {
     });
   });
 
-  // Swipe to change tabs (edge detection removed — back gesture handled by popstate)
+  // Swipe to change tabs; right-edge swipe (≤30px from right) triggers back action instead
   const swipeTabs = ["home", "shopping", "notes"];
-  let touchStartX = 0, touchStartY = 0, touchStartInDoneCard = false;
+  let touchStartX = 0, touchStartY = 0, touchStartInDoneCard = false, touchStartIsEdge = false;
   const viewEl = document.getElementById("view");
   const fogEl = document.getElementById("swipe-fog");
 
@@ -2926,6 +2930,7 @@ function setupUI() {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     touchStartInDoneCard = !!e.target.closest(".swipe-delete-wrap");
+    touchStartIsEdge = touchStartX >= window.innerWidth - 30;
   }, { passive: true });
 
   viewEl.addEventListener("touchmove", e => {
@@ -2944,6 +2949,7 @@ function setupUI() {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
+    if (touchStartIsEdge && dx < 0) { handleBackAction(); return; }
     if (touchStartInDoneCard && dx < 0) return; // swipe-to-delete started here — don't change tab
     const cur = swipeTabs.indexOf(state.view);
     if (dx < 0 && cur < swipeTabs.length - 1) setView(swipeTabs[cur + 1]);
@@ -3273,6 +3279,15 @@ function collapseLowestExpandedContainer() {
 let _dialogShowing = false;
 let _exitPending = false;
 
+function handleBackAction() {
+  if (_dialogShowing) {
+    document.getElementById("exit-confirm-overlay")?.remove();
+    _dialogShowing = false;
+  } else if (!closeLastModal() && !collapseLowestExpandedContainer()) {
+    showExitConfirmDialog();
+  }
+}
+
 function showExitConfirmDialog() {
   _dialogShowing = true;
   const overlay = document.createElement("div");
@@ -3313,12 +3328,7 @@ async function initApp() {
   history.pushState({ fluxo: true }, "");
   window.addEventListener("popstate", () => {
     if (_exitPending) { _exitPending = false; return; }
-    if (_dialogShowing) {
-      document.getElementById("exit-confirm-overlay")?.remove();
-      _dialogShowing = false;
-    } else if (!closeLastModal() && !collapseLowestExpandedContainer()) {
-      showExitConfirmDialog();
-    }
+    handleBackAction();
     history.pushState({ fluxo: true }, ""); // always restore — PWA only closes via _exitPending
   });
   setInterval(() => {

@@ -3,10 +3,15 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.5";
+const APP_VERSION = "7.6";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "7.6": [
+    "Gesto de borda: touch handler removido — no Android o back gesture já dispara popstate automaticamente",
+    "Popstate: debounce de 300ms mantido para prevenção de disparos rápidos acidentais",
+    "Saída: Sim fecha o PWA com segundo history.back() agendado via setTimeout",
+  ],
   "7.5": [
     "Gesto de borda direita: debounce de 300ms impede duplo disparo (touch + popstate do mesmo gesto físico)",
     "Saída confirmada: agora fecha o PWA de verdade ao clicar Sim (segundo history.back via setTimeout)",
@@ -2924,9 +2929,9 @@ function setupUI() {
     });
   });
 
-  // Swipe to change tabs; right-edge swipe (≤30px from right) triggers back action instead
+  // Swipe to change tabs only — back gesture handled exclusively via popstate (Android system)
   const swipeTabs = ["home", "shopping", "notes"];
-  let touchStartX = 0, touchStartY = 0, touchStartInDoneCard = false, touchStartIsEdge = false;
+  let touchStartX = 0, touchStartY = 0, touchStartInDoneCard = false;
   const viewEl = document.getElementById("view");
   const fogEl = document.getElementById("swipe-fog");
 
@@ -2934,7 +2939,6 @@ function setupUI() {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
     touchStartInDoneCard = !!e.target.closest(".swipe-delete-wrap");
-    touchStartIsEdge = touchStartX >= window.innerWidth - 30;
   }, { passive: true });
 
   viewEl.addEventListener("touchmove", e => {
@@ -2953,7 +2957,6 @@ function setupUI() {
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     if (Math.abs(dx) < 60 || Math.abs(dy) > Math.abs(dx)) return;
-    if (touchStartIsEdge && dx < 0) { handleBackAction(); return; }
     if (touchStartInDoneCard && dx < 0) return; // swipe-to-delete started here — don't change tab
     const cur = swipeTabs.indexOf(state.view);
     if (dx < 0 && cur < swipeTabs.length - 1) setView(swipeTabs[cur + 1]);

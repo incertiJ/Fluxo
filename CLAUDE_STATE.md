@@ -14,8 +14,8 @@ Memória de sessão. Atualize ao final de cada sessão antes de resetar o chat.
 **Branch de trabalho**: `claude/fix-bugs-add-features-QQVWY` ← NUNCA mudar sem permissão
 **Branch de deploy**: `claude/fluxo-v2`
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`
-**Versão atual**: `7.3`
-**SW cache**: `fluxo-v21`
+**Versão atual**: `7.7`
+**SW cache**: `fluxo-v23`
 
 > **REGRA DE VERSÃO**: TODA modificação no código incrementa a versão. +0.01 bugfix, +0.1 feature, +1.0 estrutural (confirmar antes).
 
@@ -85,7 +85,7 @@ fluxo/changelog-checks — checkboxes do changelog
 fluxo/auth        — { pin: sha256hash, webAuthnCredId? }
 fluxo/icon-png    — PNG 192×192 para notificações (gerado em initApp)
 fluxo/badge-png-v3 — PNG 96×96 monochrome badge (ondas brancas sem fundo)
-fluxo-v21         — cache SW (assets estáticos)
+fluxo-v23         — cache SW (assets estáticos)
 fluxo-notif       — cache SW (scheduled-items persistidos)
 ```
 

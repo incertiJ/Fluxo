@@ -3,10 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.6";
+const APP_VERSION = "7.7";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "7.7": [
+    "Back gesture: try/catch no popstate garante que history.pushState é sempre chamado mesmo que render() falhe",
+    "Sair: history.go(-100) retorna direto ao estado inicial — próximo gesto do Android fecha o PWA",
+  ],
   "7.6": [
     "Gesto de borda: touch handler removido — no Android o back gesture já dispara popstate automaticamente",
     "Popstate: debounce de 300ms mantido para prevenção de disparos rápidos acidentais",
@@ -3320,7 +3324,7 @@ function showExitConfirmDialog() {
     overlay.remove();
     _dialogShowing = false;
     _exitPending = true;
-    history.back(); // consumes the entry pushed by popstate invariant → next back closes PWA
+    history.go(-100); // jump to init_url; next Android back gesture closes PWA
   });
   btnRow.append(cancelBtn, exitBtn);
   box.append(msg, btnRow);
@@ -3340,11 +3344,10 @@ async function initApp() {
   window.addEventListener("popstate", () => {
     if (_exitPending) {
       _exitPending = false;
-      // First back consumed the "fluxo" entry. Second back (from initial URL) closes the PWA.
-      setTimeout(() => history.back(), 0);
+      // history.go(-100) landed us at init_url; don't push — next Android back closes PWA.
       return;
     }
-    handleBackAction();
+    try { handleBackAction(); } catch (e) { console.error("[fluxo] popstate:", e); }
     history.pushState({ fluxo: true }, ""); // always restore — PWA only closes via _exitPending
   });
   setInterval(() => {

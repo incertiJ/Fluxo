@@ -3,10 +3,15 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.7";
+const APP_VERSION = "7.8";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "7.8": [
+    "Inicialização: todos os containers (seções, categorias de compras, cadernos) iniciam fechados a cada abertura do app",
+    "Back gesture: padrão duplo toque — primeiro gesto exibe toast; segundo gesto dentro de 3s não empurra estado, próximo back do Android fecha o PWA",
+    "Back gesture: debounce de 300ms removido (handler de toque foi removido em 7.6, debounce era redundante)",
+  ],
   "7.7": [
     "Back gesture: try/catch no popstate garante que history.pushState é sempre chamado mesmo que render() falhe",
     "Sair: history.go(-100) retorna direto ao estado inicial — próximo gesto do Android fecha o PWA",
@@ -220,7 +225,7 @@ const state = {
   editingTagDraft: null,
   editingDateTaskId: null,
   editingTagsTaskId: null,
-  homeCollapsed: { calendar: false, reminder: false, atrasadas: true, today: true, nextweek: true, later: true, done: true },
+  homeCollapsed: { calendar: true, reminder: true, atrasadas: true, today: true, nextweek: true, later: true, done: true },
   homeFilters: { types: new Set(), imps: new Set(), tagIds: new Set() },
   homeFilterOpen: { imp: false, tag: false, freq: false },
   editingCategoryId: null,
@@ -3287,49 +3292,21 @@ function collapseLowestExpandedContainer() {
   return true;
 }
 
-let _dialogShowing = false;
-let _exitPending = false;
-let _lastBackTime = 0;
+let _exitReadyAt = 0;
 
+// Returns true when exit is confirmed (caller must NOT pushState — app will close on next back).
 function handleBackAction() {
-  const now = Date.now();
-  if (now - _lastBackTime < 300) return; // debounce: prevent double-fire (touch + popstate same gesture)
-  _lastBackTime = now;
-  if (_dialogShowing) {
-    document.getElementById("exit-confirm-overlay")?.remove();
-    _dialogShowing = false;
-  } else if (!closeLastModal() && !collapseLowestExpandedContainer()) {
-    showExitConfirmDialog();
+  if (!closeLastModal() && !collapseLowestExpandedContainer()) {
+    if (Date.now() - _exitReadyAt < 3000) {
+      _exitReadyAt = 0;
+      return true; // second tap within 3s — confirm exit
+    }
+    _exitReadyAt = Date.now();
+    showToast("Toque em voltar novamente para sair do Fluxo", 3000);
+  } else {
+    _exitReadyAt = 0; // something was closed — reset timer
   }
-}
-
-function showExitConfirmDialog() {
-  _dialogShowing = true;
-  const overlay = document.createElement("div");
-  overlay.id = "exit-confirm-overlay";
-  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center";
-  const box = document.createElement("div");
-  box.style.cssText = "background:var(--surface);border-radius:16px;padding:24px 20px;width:260px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.2)";
-  const msg = document.createElement("p");
-  msg.textContent = "Deseja sair do Fluxo?";
-  msg.style.cssText = "margin:0 0 20px;font-size:1rem;color:var(--text);font-weight:500";
-  const btnRow = document.createElement("div");
-  btnRow.style.cssText = "display:flex;gap:12px";
-  const cancelBtn = el("button", { type: "button" }, "Cancelar");
-  cancelBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:0.95rem;cursor:pointer";
-  cancelBtn.addEventListener("click", () => { overlay.remove(); _dialogShowing = false; });
-  const exitBtn = el("button", { type: "button" }, "Sair");
-  exitBtn.style.cssText = "flex:1;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:0.95rem;cursor:pointer";
-  exitBtn.addEventListener("click", () => {
-    overlay.remove();
-    _dialogShowing = false;
-    _exitPending = true;
-    history.go(-100); // jump to init_url; next Android back gesture closes PWA
-  });
-  btnRow.append(cancelBtn, exitBtn);
-  box.append(msg, btnRow);
-  overlay.appendChild(box);
-  document.body.appendChild(overlay);
+  return false;
 }
 
 async function initApp() {
@@ -3339,16 +3316,13 @@ async function initApp() {
   scheduleNotifications();
 
   // Intercept system back gesture (Android).
-  // Invariant: popstate ALWAYS pushes state back (keeps app alive), except when _exitPending.
+  // Normal: always pushState to keep app alive.
+  // Exit confirmed (handleBackAction returns true): don't push — at init_url, next back closes PWA.
   history.pushState({ fluxo: true }, "");
   window.addEventListener("popstate", () => {
-    if (_exitPending) {
-      _exitPending = false;
-      // history.go(-100) landed us at init_url; don't push — next Android back closes PWA.
-      return;
-    }
-    try { handleBackAction(); } catch (e) { console.error("[fluxo] popstate:", e); }
-    history.pushState({ fluxo: true }, ""); // always restore — PWA only closes via _exitPending
+    let exitConfirmed = false;
+    try { exitConfirmed = handleBackAction(); } catch (e) { console.error("[fluxo] popstate:", e); }
+    if (!exitConfirmed) history.pushState({ fluxo: true }, "");
   });
   setInterval(() => {
     checkDueNotifications();
@@ -3363,8 +3337,15 @@ async function initApp() {
   });
 }
 
+function resetCollapsed() {
+  Object.keys(state.homeCollapsed).forEach(k => { state.homeCollapsed[k] = true; });
+  (state.shopping.categories || []).forEach(c => { c.collapsed = true; });
+  (state.notes.notebooks || []).forEach(n => { n.collapsed = true; });
+}
+
 async function init() {
   load();
+  resetCollapsed();
   applyTheme();
   setupUI();
   setupSpeech();

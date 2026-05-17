@@ -2130,6 +2130,22 @@ div.page-textarea[contenteditable] ul.todo-list li.todo-done { text-decoration: 
 .shopping-imp-badge--necessidade { background: #f4e4cc; color: #a07030; }
 .shopping-imp-badge--urgente  { background: #f2dada; color: #a04040; }
 
+.shopping-cat-badge {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.shopping-empty-msg {
+  padding: 14px 16px;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin: 0;
+}
+
 .imp-dropdown {
   position: fixed;
   z-index: 500;

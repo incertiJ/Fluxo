@@ -3,10 +3,17 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.8";
+const APP_VERSION = "7.9";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "7.9": [
+    "Compras: container 'Importantes' agrupa todos os itens urgentes/necessidade de todas as listas",
+    "Compras: itens em Importantes têm cor da lista de origem, badge do nome da lista e badge de importância",
+    "Compras: Importantes tem cor customizável via long press no header",
+    "Back gesture: containers do Importantes colapsáveis via gesto back",
+    "Fix: containers forçados fechados ao completar autenticação (PIN)",
+  ],
   "7.8": [
     "Inicialização: todos os containers (seções, categorias de compras, cadernos) iniciam fechados a cada abertura do app",
     "Back gesture: padrão duplo toque — primeiro gesto exibe toast; segundo gesto dentro de 3s não empurra estado, próximo back do Android fecha o PWA",
@@ -266,6 +273,7 @@ function load() {
       state.tasks = data.tasks || [];
       state.tags = data.tags || [];
       state.shopping = data.shopping || { categories: [] };
+      if (!state.shopping.importantes) state.shopping.importantes = { collapsed: true, color: "#f2dada" };
       state.notes = data.notes || { notebooks: [], pages: [] };
       state.notifSchedule = data.notifSchedule || [{ h: 9, m: 0 }, { h: 22, m: 0 }];
       state.appTheme = data.appTheme || "auto";
@@ -962,14 +970,80 @@ function renderTaskCard(t, opts = {}) {
 
 function renderShopping(root) {
   root.className = "view view--scrollable";
+  renderShoppingImportantes(root);
   const cats = state.shopping.categories;
-
-  if (!cats.length) {
-    root.appendChild(el("div", { class: "empty" }, "Nenhuma categoria ainda. Toque em + para adicionar um item."));
-    return;
-  }
+  if (!cats.length) return;
   const sorted = [...cats].sort((a, b) => b.items.length - a.items.length);
   sorted.forEach(cat => root.appendChild(renderShoppingCategory(cat)));
+}
+
+function renderShoppingImportantes(root) {
+  const imp = state.shopping.importantes;
+  if (!imp) return;
+
+  const allItems = [];
+  for (const cat of state.shopping.categories) {
+    for (const item of cat.items) {
+      if (item.importance === "urgente" || item.importance === "necessidade") {
+        allItems.push({ item, cat });
+      }
+    }
+  }
+
+  const card = el("div", { class: "shopping-category" });
+  card.style.setProperty("--cat-color", imp.color);
+  card.style.setProperty("--cat-bg", hexToRgba(imp.color, 0.13));
+
+  const hdr = el("div", {
+    class: "shopping-cat-header",
+    "data-cat-id": "importantes",
+    "data-expanded": imp.collapsed ? "0" : "1"
+  });
+  hdr.addEventListener("click", () => { imp.collapsed = !imp.collapsed; save(); render(); });
+  let lpTimer = null;
+  hdr.addEventListener("touchstart", () => { lpTimer = setTimeout(() => { lpTimer = null; openCategoryModal("importantes"); }, 300); }, { passive: true });
+  hdr.addEventListener("touchend", () => { clearTimeout(lpTimer); lpTimer = null; }, { passive: true });
+  hdr.addEventListener("touchmove", () => { clearTimeout(lpTimer); lpTimer = null; }, { passive: true });
+
+  const dot = el("span", { class: "shopping-cat-dot" });
+  dot.style.background = imp.color;
+  const unchecked = allItems.filter(({ item }) => !item.checked).length;
+  const count = el("span", { class: "shopping-cat-count" }, `${allItems.length - unchecked}/${allItems.length}`);
+  const toggle = el("span", { class: "shopping-cat-chevron" }, imp.collapsed ? "▶" : "▼");
+  hdr.append(dot, el("span", { class: "shopping-cat-name" }, "Importantes"), count, toggle);
+  card.appendChild(hdr);
+
+  if (!imp.collapsed) {
+    const body = el("div", { class: "shopping-cat-body" });
+    if (!allItems.length) {
+      body.appendChild(el("p", { class: "shopping-empty-msg" }, "Nenhum item importante."));
+    } else {
+      const IMP_ORDER = ["urgente", "necessidade"];
+      const IMP_LABELS = { urgente: "Urgente", necessidade: "Necessidade" };
+      const sorted = [...allItems].sort((a, b) => {
+        if (a.item.checked !== b.item.checked) return a.item.checked ? 1 : -1;
+        const d = IMP_ORDER.indexOf(a.item.importance) - IMP_ORDER.indexOf(b.item.importance);
+        return d !== 0 ? d : a.cat.name.localeCompare(b.cat.name);
+      });
+      for (const { item, cat } of sorted) {
+        const row = el("div", { class: "shopping-item" + (item.checked ? " checked" : "") });
+        row.style.borderLeft = `3px solid ${cat.color}`;
+        const cb = el("input", { type: "checkbox", class: "styled-check" });
+        cb.checked = item.checked;
+        cb.addEventListener("change", e => { e.stopPropagation(); item.checked = cb.checked; save(); render(); });
+        const nameEl = el("span", { class: "shopping-item-name" }, item.name);
+        nameEl.style.color = cat.color;
+        const catBadge = el("span", { class: "shopping-cat-badge" }, cat.name);
+        catBadge.style.background = hexToRgba(cat.color, 0.18);
+        catBadge.style.color = cat.color;
+        const impBadge = el("span", { class: `shopping-imp-badge shopping-imp-badge--${item.importance}` }, IMP_LABELS[item.importance]);
+        row.append(cb, nameEl, catBadge, impBadge);
+        body.appendChild(row);
+      }
+    }
+    card.appendChild(body);
+  }
+  root.appendChild(card);
 }
 
 function renderShoppingCategory(cat) {
@@ -1193,11 +1267,17 @@ function activateItemEdit(cat, idx, row, checkboxEl) {
 
 function openCategoryModal(id = null) {
   state.editingCategoryId = id;
-  const cat = id ? state.shopping.categories.find(c => c.id === id) : null;
-  state.editingCategoryDraft = { name: cat?.name || "", color: cat?.color || TAG_COLORS[0] };
-  document.getElementById("cat-modal-title").textContent = id ? "Editar categoria" : "Nova categoria";
-  document.getElementById("cat-delete-btn").hidden = !id;
-  document.getElementById("cat-name").value = state.editingCategoryDraft.name;
+  const isImp = id === "importantes";
+  const cat = id && !isImp ? state.shopping.categories.find(c => c.id === id) : null;
+  state.editingCategoryDraft = {
+    name: isImp ? "Importantes" : (cat?.name || ""),
+    color: isImp ? (state.shopping.importantes?.color || "#f2dada") : (cat?.color || TAG_COLORS[0])
+  };
+  document.getElementById("cat-modal-title").textContent = isImp ? "Cor dos Importantes" : (id ? "Editar categoria" : "Nova categoria");
+  document.getElementById("cat-delete-btn").hidden = isImp ? true : !id;
+  const nameInput = document.getElementById("cat-name");
+  nameInput.value = state.editingCategoryDraft.name;
+  nameInput.readOnly = isImp;
   renderCategoryColorGrid();
   document.getElementById("cat-modal").hidden = false;
 }
@@ -1220,6 +1300,11 @@ function renderCategoryColorGrid() {
 }
 
 function saveCategoryModal() {
+  const isImp = state.editingCategoryId === "importantes";
+  if (isImp) {
+    if (state.shopping.importantes) state.shopping.importantes.color = state.editingCategoryDraft.color;
+    save(); closeCategoryModal(); render(); return;
+  }
   const name = document.getElementById("cat-name").value.trim();
   if (!name) { showToast("Informe um nome"); return; }
   let newId = null;
@@ -3283,8 +3368,12 @@ function collapseLowestExpandedContainer() {
     save();
     render();
   } else if (target.type === "cat") {
-    const cat = state.shopping.categories.find(c => c.id === target.catId);
-    if (cat) { cat.collapsed = true; save(); render(); }
+    if (target.catId === "importantes" && state.shopping.importantes) {
+      state.shopping.importantes.collapsed = true; save(); render();
+    } else {
+      const cat = state.shopping.categories.find(c => c.id === target.catId);
+      if (cat) { cat.collapsed = true; save(); render(); }
+    }
   } else if (target.type === "nb") {
     const nb = state.notes.notebooks.find(n => n.id === target.nbId);
     if (nb) { nb.collapsed = true; save(); render(); }
@@ -3341,6 +3430,7 @@ function resetCollapsed() {
   Object.keys(state.homeCollapsed).forEach(k => { state.homeCollapsed[k] = true; });
   (state.shopping.categories || []).forEach(c => { c.collapsed = true; });
   (state.notes.notebooks || []).forEach(n => { n.collapsed = true; });
+  if (state.shopping.importantes) state.shopping.importantes.collapsed = true;
 }
 
 async function init() {
@@ -3351,7 +3441,7 @@ async function init() {
   setupSpeech();
   render();
 
-  showAuthScreen(() => initApp());
+  showAuthScreen(() => { resetCollapsed(); render(); initApp(); });
 }
 
 init();

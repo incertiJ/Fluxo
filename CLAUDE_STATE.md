@@ -11,11 +11,11 @@ Memória de sessão. Atualize ao final de cada sessão antes de resetar o chat.
 **Fluxo** — PWA estático (HTML/CSS/JS puro, sem build) de gestão pessoal: tarefas, compras, notas. Tema pastel "Calm / Natural / Orgânico". Storage em `localStorage`. Sem backend.
 
 **Repo**: `incertij/fluxo`
-**Branch de trabalho**: `claude/fix-bugs-add-features-QQVWY` ← NUNCA mudar sem permissão
+**Branch de trabalho**: `claude/swipe-close-app-gesture-NpFhV` ← NUNCA mudar sem permissão
 **Branch de deploy**: `claude/fluxo-v2`
 **Deploy**: GitHub Pages apontando pra `claude/fluxo-v2`
-**Versão atual**: `7.8`
-**SW cache**: `fluxo-v24`
+**Versão atual**: `7.9`
+**SW cache**: `fluxo-v25`
 
 > **REGRA DE VERSÃO**: TODA modificação no código incrementa a versão. +0.01 bugfix, +0.1 feature, +1.0 estrutural (confirmar antes).
 

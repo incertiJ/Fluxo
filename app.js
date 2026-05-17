@@ -3,10 +3,13 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.9";
+const APP_VERSION = "7.91";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "7.91": [
+    "Lembretes: tarefas atrasadas aparecem no topo da seção com borda vermelha",
+  ],
   "7.9": [
     "Compras: container 'Importantes' agrupa todos os itens urgentes/necessidade de todas as listas",
     "Compras: itens em Importantes têm cor da lista de origem, badge do nome da lista e badge de importância",
@@ -679,12 +682,15 @@ function renderHome(root) {
   const byDueThenImp = (a, b) => (taskDue(a) || "").localeCompare(taskDue(b) || "") || b.importance - a.importance;
   const sortFn = byImp;
 
-  const reminder = state.tasks.filter(t =>
-    isVisible(t) && t.type === "oneoff" && t.importance >= 3 &&
-    !(t.deadline && t.deadline <= today)
-  ).sort((a, b) => byImp(a, b) || (a.deadline || "9999").localeCompare(b.deadline || "9999"));
-
   const overdue = state.tasks.filter(t => isVisible(t) && taskDue(t) && taskDue(t) < today).sort(sortFn);
+
+  const reminder = [
+    ...overdue,
+    ...state.tasks.filter(t =>
+      isVisible(t) && t.type === "oneoff" && t.importance >= 3 &&
+      !(t.deadline && t.deadline <= today)
+    ).sort((a, b) => byImp(a, b) || (a.deadline || "9999").localeCompare(b.deadline || "9999"))
+  ];
   const todayTasks = state.tasks.filter(t => isVisible(t) && taskDue(t) === today).sort(sortFn);
   const nextweek = state.tasks.filter(t => {
     const due = taskDue(t);
@@ -884,7 +890,7 @@ function unitShort(u, n) {
 
 function renderTaskCard(t, opts = {}) {
   const card = el("article", {
-    class: "task" + (t.completed ? " completed" : ""),
+    class: "task" + (t.completed ? " completed" : "") + (isOverdue(t) ? " task--overdue" : ""),
     "data-imp": t.importance,
     "data-task-id": t.id
   });

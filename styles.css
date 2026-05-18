@@ -447,7 +447,7 @@ input[type="radio"]:checked::after {
 .task[data-imp="2"] { border-color: var(--imp-mid); background: var(--imp-mid-tint); }
 .task[data-imp="3"] { border-color: var(--imp-high); background: var(--imp-high-tint); }
 .task[data-imp="4"] { border-color: var(--imp-crit); background: var(--imp-crit-tint); }
-.task.task--overdue { border-left: 4px solid #c04040; }
+.task.task--overdue { border-color: #c04040; }
 
 .task-checkbox {
   width: 22px;

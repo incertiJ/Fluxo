@@ -3,10 +3,13 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "8.1";
+const APP_VERSION = "8.2";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "8.2": [
+    "Lembretes: borda vermelha completa (todos os lados) em tarefas atrasadas",
+  ],
   "8.1": [
     "Lembretes: atrasadas no topo filtradas por importância alta/crítica (≥ 3) com borda vermelha",
   ],

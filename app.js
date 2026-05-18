@@ -3,10 +3,13 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "8.4";
+const APP_VERSION = "8.5";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "8.5": [
+    "Fix: swipe-delete em páginas de notas — fundo vermelho não aparece mais em repouso",
+  ],
   "8.4": [
     "Notas: microfone é toggle — toque para gravar, toque novamente para parar e inserir texto",
     "Notas: deslize página para a esquerda para apagar",

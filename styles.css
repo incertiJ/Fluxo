@@ -1661,7 +1661,8 @@ input[type="radio"]:checked::after {
   border-radius: 8px;
   transition: background 0.12s;
 }
-.page-row:last-of-type { border-bottom: none; }
+.page-row:last-of-type,
+.swipe-delete-wrap:last-child .page-row { border-bottom: none; }
 .page-row:hover { background: var(--surface-3); }
 
 .page-icon { font-size: 1rem; flex-shrink: 0; }
@@ -2110,7 +2111,8 @@ div.page-textarea[contenteditable] ul.todo-list li.todo-done { text-decoration: 
 }
 
 .swipe-delete-wrap .task,
-.swipe-delete-wrap .shopping-item {
+.swipe-delete-wrap .shopping-item,
+.swipe-delete-wrap .page-row {
   position: relative;
   z-index: 1;
   background: var(--surface);

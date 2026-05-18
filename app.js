@@ -3,11 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "7.91";
+const APP_VERSION = "8.1";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
-  "7.91": [
+  "8.1": [
+    "Lembretes: atrasadas no topo filtradas por importância alta/crítica (≥ 3) com borda vermelha",
+  ],
+  "8.0": [
     "Lembretes: tarefas atrasadas aparecem no topo da seção com borda vermelha",
   ],
   "7.9": [
@@ -685,7 +688,7 @@ function renderHome(root) {
   const overdue = state.tasks.filter(t => isVisible(t) && taskDue(t) && taskDue(t) < today).sort(sortFn);
 
   const reminder = [
-    ...overdue,
+    ...overdue.filter(t => t.importance >= 3),
     ...state.tasks.filter(t =>
       isVisible(t) && t.type === "oneoff" && t.importance >= 3 &&
       !(t.deadline && t.deadline <= today)

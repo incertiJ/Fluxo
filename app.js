@@ -3,10 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "8.5";
+const APP_VERSION = "8.6";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "8.6": [
+    "Fix: microfone parava imediatamente por evento mousedown sintético após touchend",
+    "Mic: animação mais visível — botão vermelho sólido com pulso de escala enquanto grava",
+  ],
   "8.5": [
     "Fix: swipe-delete em páginas de notas — fundo vermelho não aparece mais em repouso",
   ],
@@ -1900,33 +1904,37 @@ function setupPageToolbar() {
   }
 
   toolbar.querySelectorAll("[data-action]").forEach(btn => {
-    btn.addEventListener("mousedown", e => {
-      e.preventDefault();
-      const action = btn.dataset.action;
-      if (action === "color") {
-        if (picker.hidden) showPicker(btn); else hidePicker();
-        return;
-      }
-      hidePicker();
-      switch (action) {
-        case "bold": document.execCommand("bold"); break;
-        case "italic": document.execCommand("italic"); break;
-        case "title": {
-          const block = document.queryCommandValue("formatBlock").toLowerCase();
-          document.execCommand("formatBlock", false, block === "h1" ? "p" : "h1");
-          break;
+    if (btn.dataset.action === "mic") {
+      // mic: click only (touch already handled via touchend+preventDefault above)
+      btn.addEventListener("click", () => startDictation(btn));
+    } else {
+      btn.addEventListener("mousedown", e => {
+        e.preventDefault();
+        const action = btn.dataset.action;
+        if (action === "color") {
+          if (picker.hidden) showPicker(btn); else hidePicker();
+          return;
         }
-        case "list": document.execCommand("insertUnorderedList"); break;
-        case "todo": insertTodoList(); break;
-        case "undo": document.execCommand("undo"); break;
-        case "mic": startDictation(btn); break;
-      }
-    });
+        hidePicker();
+        switch (action) {
+          case "bold": document.execCommand("bold"); break;
+          case "italic": document.execCommand("italic"); break;
+          case "title": {
+            const block = document.queryCommandValue("formatBlock").toLowerCase();
+            document.execCommand("formatBlock", false, block === "h1" ? "p" : "h1");
+            break;
+          }
+          case "list": document.execCommand("insertUnorderedList"); break;
+          case "todo": insertTodoList(); break;
+          case "undo": document.execCommand("undo"); break;
+        }
+      });
+    }
     // touch support for non-color buttons
     if (btn.dataset.action !== "color") {
-      btn.addEventListener("touchstart", e => { if (btn.dataset.action !== "mic") e.preventDefault(); }, { passive: false });
+      btn.addEventListener("touchstart", e => { e.preventDefault(); }, { passive: false });
       btn.addEventListener("touchend", e => {
-        if (btn.dataset.action !== "mic") e.preventDefault();
+        e.preventDefault();
         const action = btn.dataset.action;
         hidePicker();
         switch (action) {

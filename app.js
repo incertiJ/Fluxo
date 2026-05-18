@@ -3,10 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "8.2";
+const APP_VERSION = "8.3";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "8.3": [
+    "Notas: botão de microfone na toolbar — dita texto por voz (pt-BR) e insere no cursor",
+    "Compras: container Importantes exibe apenas itens pendentes (marcados como feito não aparecem)",
+  ],
   "8.2": [
     "Lembretes: borda vermelha completa (todos os lados) em tarefas atrasadas",
   ],
@@ -996,7 +1000,7 @@ function renderShoppingImportantes(root) {
   const allItems = [];
   for (const cat of state.shopping.categories) {
     for (const item of cat.items) {
-      if (item.importance === "urgente" || item.importance === "necessidade") {
+      if ((item.importance === "urgente" || item.importance === "necessidade") && !item.checked) {
         allItems.push({ item, cat });
       }
     }
@@ -1019,8 +1023,7 @@ function renderShoppingImportantes(root) {
 
   const dot = el("span", { class: "shopping-cat-dot" });
   dot.style.background = imp.color;
-  const unchecked = allItems.filter(({ item }) => !item.checked).length;
-  const count = el("span", { class: "shopping-cat-count" }, `${allItems.length - unchecked}/${allItems.length}`);
+  const count = el("span", { class: "shopping-cat-count" }, String(allItems.length));
   const toggle = el("span", { class: "shopping-cat-chevron" }, imp.collapsed ? "▶" : "▼");
   hdr.append(dot, el("span", { class: "shopping-cat-name" }, "Importantes"), count, toggle);
   card.appendChild(hdr);
@@ -1033,12 +1036,11 @@ function renderShoppingImportantes(root) {
       const IMP_ORDER = ["urgente", "necessidade"];
       const IMP_LABELS = { urgente: "Urgente", necessidade: "Necessidade" };
       const sorted = [...allItems].sort((a, b) => {
-        if (a.item.checked !== b.item.checked) return a.item.checked ? 1 : -1;
         const d = IMP_ORDER.indexOf(a.item.importance) - IMP_ORDER.indexOf(b.item.importance);
         return d !== 0 ? d : a.cat.name.localeCompare(b.cat.name);
       });
       for (const { item, cat } of sorted) {
-        const row = el("div", { class: "shopping-item" + (item.checked ? " checked" : "") });
+        const row = el("div", { class: "shopping-item" });
         row.style.borderLeft = `3px solid ${cat.color}`;
         const cb = el("input", { type: "checkbox", class: "styled-check" });
         cb.checked = item.checked;
@@ -1739,6 +1741,39 @@ function setupTodoCheckboxes(editor) {
 
 /* ===== Notes page toolbar ===== */
 
+function startDictation(btn) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast("Reconhecimento de voz não suportado neste navegador"); return; }
+  if (btn.classList.contains("page-tool-btn--mic-active")) return;
+
+  const editor = document.getElementById("page-content-input");
+  const sel = window.getSelection();
+  const savedRange = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+
+  const rec = new SR();
+  rec.lang = "pt-BR";
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+
+  btn.classList.add("page-tool-btn--mic-active");
+
+  rec.onresult = e => {
+    const text = e.results[0][0].transcript;
+    if (editor) {
+      editor.focus();
+      if (savedRange) {
+        const s = window.getSelection();
+        s.removeAllRanges();
+        s.addRange(savedRange);
+      }
+      document.execCommand("insertText", false, text);
+    }
+  };
+  rec.onerror = () => btn.classList.remove("page-tool-btn--mic-active");
+  rec.onend = () => btn.classList.remove("page-tool-btn--mic-active");
+  rec.start();
+}
+
 const EDITOR_COLORS = [
   { hex: "default", label: "Padrão" },
   { hex: "#d47878", label: "Vermelho" },
@@ -1814,13 +1849,14 @@ function setupPageToolbar() {
         case "list": document.execCommand("insertUnorderedList"); break;
         case "todo": insertTodoList(); break;
         case "undo": document.execCommand("undo"); break;
+        case "mic": startDictation(btn); break;
       }
     });
     // touch support for non-color buttons
     if (btn.dataset.action !== "color") {
-      btn.addEventListener("touchstart", e => { e.preventDefault(); }, { passive: false });
+      btn.addEventListener("touchstart", e => { if (btn.dataset.action !== "mic") e.preventDefault(); }, { passive: false });
       btn.addEventListener("touchend", e => {
-        e.preventDefault();
+        if (btn.dataset.action !== "mic") e.preventDefault();
         const action = btn.dataset.action;
         hidePicker();
         switch (action) {
@@ -1834,6 +1870,7 @@ function setupPageToolbar() {
           case "list": document.execCommand("insertUnorderedList"); break;
           case "todo": insertTodoList(); break;
           case "undo": document.execCommand("undo"); break;
+          case "mic": startDictation(btn); break;
         }
       });
     } else {

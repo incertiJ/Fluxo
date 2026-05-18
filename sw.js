@@ -1,4 +1,4 @@
-const CACHE = "fluxo-v29";
+const CACHE = "fluxo-v30";
 const NOTIF_CACHE = "fluxo-notif";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js",

@@ -3,10 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "8.3";
+const APP_VERSION = "8.4";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "8.4": [
+    "Notas: microfone é toggle — toque para gravar, toque novamente para parar e inserir texto",
+    "Notas: deslize página para a esquerda para apagar",
+  ],
   "8.3": [
     "Notas: botão de microfone na toolbar — dita texto por voz (pt-BR) e insere no cursor",
     "Compras: container Importantes exibe apenas itens pendentes (marcados como feito não aparecem)",
@@ -1466,6 +1470,9 @@ function renderNotebook(nb) {
       body.appendChild(el("p", { class: "empty", style: "padding:12px;text-align:center" }, "Sem páginas."));
     } else {
       pages.forEach(page => {
+        const wrap = el("div", { class: "swipe-delete-wrap" });
+        const bg = el("div", { class: "swipe-delete-bg" });
+        bg.innerHTML = '<span class="swipe-delete-icon" aria-hidden="true">🗑</span>';
         const row = el("div", { class: "page-row" });
         const pageInfo = el("div", { class: "page-info" });
         const nameSpan = el("span", { class: "page-name" }, page.name);
@@ -1487,7 +1494,38 @@ function renderNotebook(nb) {
         if (meta.textContent) pageInfo.appendChild(meta);
         row.appendChild(pageInfo);
         row.addEventListener("click", () => openNotePage(page.id));
-        body.appendChild(row);
+
+        let swStartX = 0, swStartY = 0, swDx = 0, swDragging = false;
+        row.addEventListener("touchstart", e => {
+          swStartX = e.touches[0].clientX; swStartY = e.touches[0].clientY;
+          swDx = 0; swDragging = true; row.style.transition = "none";
+        }, { passive: true });
+        row.addEventListener("touchmove", e => {
+          if (!swDragging) return;
+          const dx = e.touches[0].clientX - swStartX;
+          const dy = e.touches[0].clientY - swStartY;
+          if (Math.abs(dy) > Math.abs(dx) + 5) { swDragging = false; row.style.transform = ""; return; }
+          if (dx >= 0) { row.style.transform = ""; return; }
+          swDx = dx;
+          row.style.transform = `translateX(${dx}px)`;
+        }, { passive: true });
+        row.addEventListener("touchend", () => {
+          swDragging = false;
+          const threshold = wrap.offsetWidth * 0.4 || 120;
+          if (swDx < -threshold) {
+            row.style.transition = "transform 0.22s ease-in";
+            row.style.transform = "translateX(-110%)";
+            setTimeout(() => { state.notes.pages = state.notes.pages.filter(p => p.id !== page.id); save(); render(); }, 230);
+          } else {
+            row.style.transition = "transform 0.18s ease-out";
+            row.style.transform = "";
+            swDx = 0;
+          }
+        }, { passive: true });
+        wrap.addEventListener("click", e => { if (Math.abs(swDx) > 8) { e.stopPropagation(); swDx = 0; } }, true);
+
+        wrap.append(bg, row);
+        body.appendChild(wrap);
       });
     }
     const addPageBtn = el("button", { type: "button", class: "ghost-btn", style: "width:100%;margin-top:8px;font-size:0.9rem" }, "+ Nova página");
@@ -1741,36 +1779,65 @@ function setupTodoCheckboxes(editor) {
 
 /* ===== Notes page toolbar ===== */
 
+let _dictRec = null;
+let _dictText = "";
+let _dictBtn = null;
+let _dictRange = null;
+
 function startDictation(btn) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showToast("Reconhecimento de voz não suportado neste navegador"); return; }
-  if (btn.classList.contains("page-tool-btn--mic-active")) return;
+
+  // Second tap: stop and insert
+  if (_dictRec) {
+    _dictRec.stop();
+    return;
+  }
 
   const editor = document.getElementById("page-content-input");
   const sel = window.getSelection();
-  const savedRange = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+  _dictRange = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+  _dictText = "";
+  _dictBtn = btn;
 
   const rec = new SR();
   rec.lang = "pt-BR";
   rec.interimResults = false;
+  rec.continuous = true;
   rec.maxAlternatives = 1;
+  _dictRec = rec;
 
   btn.classList.add("page-tool-btn--mic-active");
 
   rec.onresult = e => {
-    const text = e.results[0][0].transcript;
-    if (editor) {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) _dictText += e.results[i][0].transcript;
+    }
+  };
+
+  rec.onerror = () => {
+    _dictRec = null;
+    btn.classList.remove("page-tool-btn--mic-active");
+  };
+
+  rec.onend = () => {
+    _dictRec = null;
+    btn.classList.remove("page-tool-btn--mic-active");
+    const text = _dictText.trim();
+    if (text && editor) {
       editor.focus();
-      if (savedRange) {
+      if (_dictRange) {
         const s = window.getSelection();
         s.removeAllRanges();
-        s.addRange(savedRange);
+        s.addRange(_dictRange);
       }
       document.execCommand("insertText", false, text);
     }
+    _dictText = "";
+    _dictRange = null;
+    _dictBtn = null;
   };
-  rec.onerror = () => btn.classList.remove("page-tool-btn--mic-active");
-  rec.onend = () => btn.classList.remove("page-tool-btn--mic-active");
+
   rec.start();
 }
 

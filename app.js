@@ -3,10 +3,13 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "8.7";
+const APP_VERSION = "8.8";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "8.8": [
+    "Compras: badge de importância nos Importantes é clicável — dropdown com os 4 níveis",
+  ],
   "8.7": [
     "Mic: não para mais ao usuário pausar — reinicia automaticamente quando o browser para por silêncio",
     "Mic: para após 10s sem nenhuma fala detectada (timer reseta a cada palavra reconhecida)",
@@ -1049,7 +1052,8 @@ function renderShoppingImportantes(root) {
       body.appendChild(el("p", { class: "shopping-empty-msg" }, "Nenhum item importante."));
     } else {
       const IMP_ORDER = ["urgente", "necessidade"];
-      const IMP_LABELS = { urgente: "Urgente", necessidade: "Necessidade" };
+      const IMP_LABELS = { urgente: "Urgente", necessidade: "Necessidade", conforto: "Conforto", luxo: "Luxo" };
+      const IMP_ALL = ["urgente", "necessidade", "conforto", "luxo"];
       const sorted = [...allItems].sort((a, b) => {
         const d = IMP_ORDER.indexOf(a.item.importance) - IMP_ORDER.indexOf(b.item.importance);
         return d !== 0 ? d : a.cat.name.localeCompare(b.cat.name);
@@ -1065,7 +1069,31 @@ function renderShoppingImportantes(root) {
         const catBadge = el("span", { class: "shopping-cat-badge" }, cat.name);
         catBadge.style.background = hexToRgba(cat.color, 0.18);
         catBadge.style.color = cat.color;
-        const impBadge = el("span", { class: `shopping-imp-badge shopping-imp-badge--${item.importance}` }, IMP_LABELS[item.importance]);
+        const impBadge = el("button", { type: "button", class: `shopping-imp-badge shopping-imp-badge--${item.importance}` }, IMP_LABELS[item.importance]);
+        impBadge.addEventListener("click", e => {
+          e.stopPropagation();
+          document.querySelectorAll(".imp-dropdown").forEach(d => d.remove());
+          const drop = el("div", { class: "imp-dropdown" });
+          IMP_ALL.forEach(level => {
+            const opt = el("button", { type: "button", class: `imp-dropdown-opt imp-dropdown-opt--${level}` }, IMP_LABELS[level]);
+            opt.addEventListener("mousedown", ev => { ev.preventDefault(); ev.stopPropagation(); });
+            opt.addEventListener("click", ev => {
+              ev.stopPropagation();
+              item.importance = level;
+              save(); render();
+              drop.remove();
+            });
+            drop.appendChild(opt);
+          });
+          const r = impBadge.getBoundingClientRect();
+          drop.style.top = (r.bottom + 4) + "px";
+          drop.style.right = (window.innerWidth - r.right) + "px";
+          document.body.appendChild(drop);
+          setTimeout(() => {
+            const close = ev => { if (!drop.contains(ev.target)) { drop.remove(); document.removeEventListener("click", close); } };
+            document.addEventListener("click", close);
+          }, 10);
+        });
         row.append(cb, nameEl, catBadge, impBadge);
         body.appendChild(row);
       }

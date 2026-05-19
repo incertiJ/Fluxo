@@ -3,10 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "8.6";
+const APP_VERSION = "8.7";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "8.7": [
+    "Mic: não para mais ao usuário pausar — reinicia automaticamente quando o browser para por silêncio",
+    "Mic: para após 10s sem nenhuma fala detectada (timer reseta a cada palavra reconhecida)",
+  ],
   "8.6": [
     "Fix: microfone parava imediatamente por evento mousedown sintético após touchend",
     "Mic: animação mais visível — botão vermelho sólido com pulso de escala enquanto grava",
@@ -1790,6 +1794,8 @@ let _dictRec = null;
 let _dictText = "";
 let _dictBtn = null;
 let _dictRange = null;
+let _dictStopping = false;
+let _dictSilenceTimer = null;
 
 function startDictation(btn) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1797,7 +1803,10 @@ function startDictation(btn) {
 
   // Second tap: stop and insert
   if (_dictRec) {
-    _dictRec.stop();
+    _dictStopping = true;
+    clearTimeout(_dictSilenceTimer);
+    _dictSilenceTimer = null;
+    try { _dictRec.stop(); } catch {}
     return;
   }
 
@@ -1806,46 +1815,70 @@ function startDictation(btn) {
   _dictRange = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
   _dictText = "";
   _dictBtn = btn;
-
-  const rec = new SR();
-  rec.lang = "pt-BR";
-  rec.interimResults = false;
-  rec.continuous = true;
-  rec.maxAlternatives = 1;
-  _dictRec = rec;
-
+  _dictStopping = false;
   btn.classList.add("page-tool-btn--mic-active");
 
-  rec.onresult = e => {
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) _dictText += e.results[i][0].transcript;
-    }
-  };
+  function resetSilenceTimer() {
+    clearTimeout(_dictSilenceTimer);
+    _dictSilenceTimer = setTimeout(() => {
+      _dictStopping = true;
+      try { if (_dictRec) _dictRec.stop(); } catch {}
+    }, 10000);
+  }
 
-  rec.onerror = () => {
-    _dictRec = null;
-    btn.classList.remove("page-tool-btn--mic-active");
-  };
+  function startRec() {
+    const rec = new SR();
+    rec.lang = "pt-BR";
+    rec.interimResults = false;
+    rec.continuous = true;
+    rec.maxAlternatives = 1;
+    _dictRec = rec;
 
-  rec.onend = () => {
-    _dictRec = null;
-    btn.classList.remove("page-tool-btn--mic-active");
-    const text = _dictText.trim();
-    if (text && editor) {
-      editor.focus();
-      if (_dictRange) {
-        const s = window.getSelection();
-        s.removeAllRanges();
-        s.addRange(_dictRange);
+    rec.onresult = e => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) _dictText += e.results[i][0].transcript + " ";
       }
-      document.execCommand("insertText", false, text);
-    }
-    _dictText = "";
-    _dictRange = null;
-    _dictBtn = null;
-  };
+      resetSilenceTimer();
+    };
 
-  rec.start();
+    rec.onerror = () => {}; // onend handles all cleanup/restart
+
+    rec.onend = () => {
+      _dictRec = null;
+      if (_dictStopping) {
+        clearTimeout(_dictSilenceTimer);
+        _dictSilenceTimer = null;
+        if (_dictBtn) _dictBtn.classList.remove("page-tool-btn--mic-active");
+        const text = _dictText.trim();
+        if (text && editor) {
+          editor.focus();
+          if (_dictRange) {
+            const s = window.getSelection();
+            s.removeAllRanges();
+            s.addRange(_dictRange);
+          }
+          document.execCommand("insertText", false, text);
+        }
+        _dictText = "";
+        _dictRange = null;
+        _dictBtn = null;
+        _dictStopping = false;
+      } else {
+        // Browser auto-stopped (silence) → restart to keep recording
+        try { startRec(); } catch {
+          clearTimeout(_dictSilenceTimer);
+          _dictSilenceTimer = null;
+          if (_dictBtn) _dictBtn.classList.remove("page-tool-btn--mic-active");
+          _dictText = ""; _dictRange = null; _dictBtn = null;
+        }
+      }
+    };
+
+    rec.start();
+  }
+
+  resetSilenceTimer();
+  startRec();
 }
 
 const EDITOR_COLORS = [

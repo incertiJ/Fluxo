@@ -3,10 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "8.8";
+const APP_VERSION = "8.9";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "8.9": [
+    "Fix: texto do microfone aparece na página a cada frase (inserção imediata, não ao parar)",
+    "Fix: clicar no ícone para encerrar funciona — texto já estava inserido progressivamente",
+  ],
   "8.8": [
     "Compras: badge de importância nos Importantes é clicável — dropdown com os 4 níveis",
   ],
@@ -1819,9 +1823,7 @@ function setupTodoCheckboxes(editor) {
 /* ===== Notes page toolbar ===== */
 
 let _dictRec = null;
-let _dictText = "";
 let _dictBtn = null;
-let _dictRange = null;
 let _dictStopping = false;
 let _dictSilenceTimer = null;
 
@@ -1829,7 +1831,7 @@ function startDictation(btn) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showToast("Reconhecimento de voz não suportado neste navegador"); return; }
 
-  // Second tap: stop and insert
+  // Second tap: stop (text already inserted progressively)
   if (_dictRec) {
     _dictStopping = true;
     clearTimeout(_dictSilenceTimer);
@@ -1839,9 +1841,7 @@ function startDictation(btn) {
   }
 
   const editor = document.getElementById("page-content-input");
-  const sel = window.getSelection();
-  _dictRange = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
-  _dictText = "";
+  if (editor) editor.focus();
   _dictBtn = btn;
   _dictStopping = false;
   btn.classList.add("page-tool-btn--mic-active");
@@ -1864,12 +1864,18 @@ function startDictation(btn) {
 
     rec.onresult = e => {
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) _dictText += e.results[i][0].transcript + " ";
+        if (e.results[i].isFinal) {
+          const text = e.results[i][0].transcript;
+          if (text && editor) {
+            editor.focus();
+            document.execCommand("insertText", false, text + " ");
+          }
+        }
       }
       resetSilenceTimer();
     };
 
-    rec.onerror = () => {}; // onend handles all cleanup/restart
+    rec.onerror = () => {}; // onend handles restart/cleanup
 
     rec.onend = () => {
       _dictRec = null;
@@ -1877,18 +1883,6 @@ function startDictation(btn) {
         clearTimeout(_dictSilenceTimer);
         _dictSilenceTimer = null;
         if (_dictBtn) _dictBtn.classList.remove("page-tool-btn--mic-active");
-        const text = _dictText.trim();
-        if (text && editor) {
-          editor.focus();
-          if (_dictRange) {
-            const s = window.getSelection();
-            s.removeAllRanges();
-            s.addRange(_dictRange);
-          }
-          document.execCommand("insertText", false, text);
-        }
-        _dictText = "";
-        _dictRange = null;
         _dictBtn = null;
         _dictStopping = false;
       } else {
@@ -1897,7 +1891,7 @@ function startDictation(btn) {
           clearTimeout(_dictSilenceTimer);
           _dictSilenceTimer = null;
           if (_dictBtn) _dictBtn.classList.remove("page-tool-btn--mic-active");
-          _dictText = ""; _dictRange = null; _dictBtn = null;
+          _dictBtn = null;
         }
       }
     };

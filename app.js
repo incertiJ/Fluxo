@@ -3,10 +3,13 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "9.0";
+const APP_VERSION = "9.1";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "9.1": [
+    "Fix: dia da semana só para datas dentro de 7 dias; além disso mostra 'em Xd'",
+  ],
   "9.0": [
     "Tarefas: seção 'Próxima semana' renomeada para 'Essa semana'",
     "Tarefas: data relativa mostra o dia da semana (segunda...domingo) em vez de 'em Xd'",
@@ -386,11 +389,12 @@ function fmtRelativeDays(s) {
   if (d === 0) return "hoje";
   if (d === 1) return "amanhã";
   if (d === -1) return "ontem";
-  if (d > 1 && d < 30) {
+  if (d >= 2 && d <= 7) {
     const [y, m, dy] = s.split("-").map(Number);
     const names = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
     return names[new Date(y, m - 1, dy).getDay()];
   }
+  if (d > 7 && d < 30) return `em ${d}d`;
   if (d < -1 && d > -30) return `há ${-d}d`;
   if (d > 0) return `em ${Math.round(d/30)} mes${d>=60?"es":""}`;
   return `há ${Math.round(-d/30)} meses`;

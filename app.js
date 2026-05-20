@@ -3,10 +3,14 @@
 const STORAGE_KEY = "fluxo/v2";
 const NOTIFIED_KEY = "fluxo/notified";
 const CHANGELOG_CHECKS_KEY = "fluxo/changelog-checks";
-const APP_VERSION = "8.9";
+const APP_VERSION = "9.0";
 const AUTH_KEY = "fluxo/auth";
 
 const CHANGELOG = {
+  "9.0": [
+    "Tarefas: seção 'Próxima semana' renomeada para 'Essa semana'",
+    "Tarefas: data relativa mostra o dia da semana (segunda...domingo) em vez de 'em Xd'",
+  ],
   "8.9": [
     "Fix: texto do microfone aparece na página a cada frase (inserção imediata, não ao parar)",
     "Fix: clicar no ícone para encerrar funciona — texto já estava inserido progressivamente",
@@ -382,8 +386,12 @@ function fmtRelativeDays(s) {
   if (d === 0) return "hoje";
   if (d === 1) return "amanhã";
   if (d === -1) return "ontem";
-  if (d > 0 && d < 30) return `em ${d}d`;
-  if (d < 0 && d > -30) return `há ${-d}d`;
+  if (d > 1 && d < 30) {
+    const [y, m, dy] = s.split("-").map(Number);
+    const names = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+    return names[new Date(y, m - 1, dy).getDay()];
+  }
+  if (d < -1 && d > -30) return `há ${-d}d`;
   if (d > 0) return `em ${Math.round(d/30)} mes${d>=60?"es":""}`;
   return `há ${Math.round(-d/30)} meses`;
 }
@@ -748,7 +756,7 @@ function renderHome(root) {
   scroll.appendChild(makeHomeSection("reminder", "Lembrete", reminder, "Nenhuma tarefa importante próxima."));
   scroll.appendChild(makeHomeSection("atrasadas", "Atrasadas", overdue, "Nenhuma tarefa atrasada."));
   scroll.appendChild(makeHomeSection("today", "Para hoje", todayTasks, "Nenhuma tarefa para hoje."));
-  scroll.appendChild(makeHomeSection("nextweek", "Próxima semana", nextweek, "Nenhuma tarefa para a semana."));
+  scroll.appendChild(makeHomeSection("nextweek", "Essa semana", nextweek, "Nenhuma tarefa para a semana."));
   scroll.appendChild(makeHomeSection("later", "Mais tarde", later, "Nenhuma tarefa além desta semana."));
   scroll.appendChild(makeHomeSection("done", "Feitas", done, "Nenhuma tarefa concluída.", { showDelete: true }));
   root.appendChild(scroll);

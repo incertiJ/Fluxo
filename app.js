@@ -196,12 +196,14 @@ function fmtDateBR(s) {
   const d = parseYMD(s);
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" }).replace(".", "");
 }
+const WEEKDAY_NAMES = ["domingo","segunda","terça","quarta","quinta","sexta","sábado"];
 function fmtRelativeDays(s) {
   if (!s) return "";
   const d = diffDays(s, todayISO());
   if (d === 0) return "hoje";
   if (d === 1) return "amanhã";
   if (d === -1) return "ontem";
+  if (d > 1 && d <= 7) return WEEKDAY_NAMES[parseYMD(s).getDay()];
   if (d > 0 && d < 30) return `em ${d}d`;
   if (d < 0 && d > -30) return `há ${-d}d`;
   if (d > 0) return `em ${Math.round(d/30)} mes${d>=60?"es":""}`;
@@ -537,7 +539,7 @@ function renderHome(root) {
   scroll.appendChild(makeHomeSection("reminder", "Lembrete", reminder, "Nenhuma tarefa importante próxima."));
   scroll.appendChild(makeHomeSection("atrasadas", "Atrasadas", overdue, "Nenhuma tarefa atrasada."));
   scroll.appendChild(makeHomeSection("today", "Para hoje", todayTasks, "Nenhuma tarefa para hoje."));
-  scroll.appendChild(makeHomeSection("nextweek", "Próxima semana", nextweek, "Nenhuma tarefa para a semana."));
+  scroll.appendChild(makeHomeSection("nextweek", "Essa semana", nextweek, "Nenhuma tarefa para a semana."));
   scroll.appendChild(makeHomeSection("later", "Mais tarde", later, "Nenhuma tarefa além desta semana."));
   scroll.appendChild(makeHomeSection("done", "Feitas", done, "Nenhuma tarefa concluída.", { showDelete: true }));
   root.appendChild(scroll);
